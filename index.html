@@ -52,6 +52,28 @@
             border-radius: 4px;
         }
 
+        select {
+            padding: 0.3rem;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            color: #eee;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 0.3rem 1rem;
+            background: #0f3460;
+            border: 1px solid #0f3460;
+            color: #eee;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         #output {
             font-family: "JetBrains Mono", "Fira Code", monospace;
             font-size: 12px;
@@ -84,6 +106,9 @@
     <div class="controls">
         <input type="file" id="fileInput" accept="image/*">
         <label>Width: <input type="number" id="widthInput" value="76" min="10" max="400"></label>
+        <label>Distance: <select id="distanceSelect"></select></label>
+        <label>Evaluate: <select id="evaluateSelect"></select></label>
+        <button id="runBtn" disabled>Run</button>
     </div>
     <div id="status">Select an image to begin.</div>
     <pre id="output"></pre>
@@ -93,13 +118,65 @@
         import {
             estimateAscii,
             browserCanvasFactory,
+            DISTANCE_FNS,
+            EVALUTATE_FNS,
         } from "./dist/utf8-painter.esm.js";
 
         const fileInput = document.getElementById("fileInput");
         const widthInput = document.getElementById("widthInput");
+        const distanceSelect = document.getElementById("distanceSelect");
+        const evaluateSelect = document.getElementById("evaluateSelect");
+        const runBtn = document.getElementById("runBtn");
         const output = document.getElementById("output");
         const status = document.getElementById("status");
         const hiddenCanvas = document.getElementById("hiddenCanvas");
+
+        let currentImageData = null;
+
+        for (const key of Object.keys(DISTANCE_FNS)) {
+            const opt = document.createElement("option");
+            opt.value = key;
+            opt.textContent = key;
+            distanceSelect.appendChild(opt);
+        }
+
+        for (const key of Object.keys(EVALUTATE_FNS)) {
+            const opt = document.createElement("option");
+            opt.value = key;
+            opt.textContent = key;
+            evaluateSelect.appendChild(opt);
+        }
+
+        async function run() {
+            if (!currentImageData) return;
+
+            const width = parseInt(widthInput.value, 10) || 76;
+            status.textContent = "Converting... (this may take a moment)";
+            output.textContent = "";
+
+            await new Promise((r) => setTimeout(r, 50));
+            await document.fonts.ready;
+
+            try {
+                const distance_fn = distanceSelect.value;
+                const evaluate_fn = evaluateSelect.value;
+                for (const ascii of estimateAscii(
+                    currentImageData,
+                    width,
+                    browserCanvasFactory,
+                    evaluate_fn,
+                    distance_fn,
+                )) {
+                    console.log(ascii.length)
+                    output.textContent = ascii;
+                    status.textContent = `Done! ${width} columns.`;
+                    await new Promise(x => requestAnimationFrame(x));
+                }
+            } catch (err) {
+                status.textContent = `Error: ${err.message}`;
+                console.error(err);
+            }
+        }
 
         fileInput.addEventListener("change", async (e) => {
             const file = e.target.files[0];
@@ -109,41 +186,16 @@
             output.textContent = "";
 
             const img = new Image();
-            img.onload = async () => {
+            img.onload = () => {
                 hiddenCanvas.width = img.width;
                 hiddenCanvas.height = img.height;
                 const ctx = hiddenCanvas.getContext("2d");
                 ctx.drawImage(img, 0, 0);
-                const imageData = ctx.getImageData(
+                currentImageData = ctx.getImageData(
                     0, 0, img.width, img.height
                 );
-
-                const width = parseInt(widthInput.value, 10) || 76;
-                status.textContent =
-                    "Converting... (this may take a moment)";
-
-                // Yield to let the status text render before blocking
-                await new Promise((r) => setTimeout(r, 50));
-
-                // Wait for JetBrains Mono to load
-                await document.fonts.ready;
-
-                try {
-                    for (const ascii of estimateAscii(
-                        imageData,
-                        width,
-                        browserCanvasFactory,
-                    )) {
-                        console.log(ascii.length)
-                        output.textContent = ascii;
-                        status.textContent = `Done! ${width} columns.`;
-                        await new Promise(x => requestAnimationFrame(x));
-
-                    }
-                } catch (err) {
-                    status.textContent = `Error: ${err.message}`;
-                    console.error(err);
-                }
+                runBtn.disabled = false;
+                status.textContent = "Image loaded. Press Run to convert.";
             };
 
             img.onerror = () => {
@@ -152,6 +204,8 @@
 
             img.src = URL.createObjectURL(file);
         });
+
+        runBtn.addEventListener("click", run);
     </script>
 </body>
 

@@ -1,5 +1,6 @@
 import type { CanvasFactory } from "./canvas-factory";
-import { type GlyphEntry, ssimDistance } from "./distance";
+import { DISTANCE_FNS, type GlyphEntry, } from "./distance";
+import { EVALUTATE_FNS } from "./evaluate";
 import type { RawImage } from "./types";
 
 const BLOCK_ELEMENTS = "▀▁▂▃▄▅▆▇█▉▊▋▌▍▎▏▐░▒▓▕▖▗▘▙▚▛▜▝▞▟";
@@ -33,6 +34,8 @@ const ASCII_CHARS = [
 
 const FONT_RATIO = 0.4;
 
+
+
 function samplePixel(
     png: RawImage,
     glyphs: GlyphEntry[],
@@ -40,6 +43,7 @@ function samplePixel(
     y: number,
     width: number,
     height: number,
+    distance_fn: keyof typeof DISTANCE_FNS,
     brightness: number = 0,
     contrast: number = 1,
 ): string {
@@ -85,7 +89,7 @@ function samplePixel(
     const sigS2 = sumS2 / n - muS2;
 
     for (let gi = 0; gi < glyphs.length; gi++) {
-        const dist = ssimDistance(glyphs[gi], srcLum, n, muS, muS2, sigS2);
+        const dist = DISTANCE_FNS[distance_fn](glyphs[gi], srcLum, n, muS, muS2, sigS2);
         if (dist < bestDist) {
             bestDist = dist;
             bestChar = glyphs[gi].char;
@@ -145,6 +149,7 @@ function renderAscii(
     png: RawImage,
     width: number,
     glyphs: GlyphEntry[],
+    distance_fn: keyof typeof DISTANCE_FNS,
     brightness: number = 0,
     contrast: number = 1,
 ): string {
@@ -162,6 +167,7 @@ function renderAscii(
                 row,
                 width,
                 height,
+                distance_fn,
                 brightness,
                 contrast,
             );
@@ -171,19 +177,13 @@ function renderAscii(
     return lines.join("\n");
 }
 
-function kurtosis(xs: number[]): number {
-    const n = xs.length;
-    const mean = xs.reduce((a, b) => a + b, 0) / n;
-    const m2 = xs.reduce((a, x) => a + (x - mean) ** 2, 0) / n;
-    const m4 = xs.reduce((a, x) => a + (x - mean) ** 4, 0) / n;
-    if (m2 === 0) return 0;
-    return 0 - (m4 / (m2 * m2) - 3);
-}
 
 export function* estimateAscii(
     png: RawImage,
     width: number,
     canvasFactory: CanvasFactory,
+    evaluate_fn: keyof typeof EVALUTATE_FNS,
+    distance_fn: keyof typeof DISTANCE_FNS,
 ): Generator<string> {
     const cell_width = Math.floor(png.width / width);
     const cell_height = Math.ceil(cell_width / FONT_RATIO);
@@ -196,8 +196,8 @@ export function* estimateAscii(
     // Optimization 3: brightness/contrast passed to renderAscii instead of allocating
     // a new image on every iteration
     function f(c: number, b: number): number {
-        ascii = renderAscii(png, width, glyphs, b, c);
-        return kurtosis(ascii.split("").map((x) => ASCII_CHARS.indexOf(x)));
+        ascii = renderAscii(png, width, glyphs, distance_fn, b, c);
+        return EVALUTATE_FNS[evaluate_fn](ascii.split("").map((x) => ASCII_CHARS.indexOf(x)));
     }
 
     const fc = f(contrast, brightness);
@@ -254,7 +254,7 @@ export function* estimateAscii(
     console.log(
         `Final -- Contrast ${contrast}, Brightness ${brightness}, Total ${val}`,
     );
-    const result = renderAscii(png, width, glyphs, brightness, contrast);
+    const result = renderAscii(png, width, glyphs, distance_fn, brightness, contrast,);
     return result;
 }
 
@@ -262,6 +262,7 @@ export function pngToAscii(
     png: RawImage,
     width: number,
     canvasFactory: CanvasFactory,
+    distance_fn: keyof typeof DISTANCE_FNS
 ): string {
     const cell_width = Math.floor(png.width / width);
     const cell_height = Math.ceil(cell_width / FONT_RATIO);
@@ -269,5 +270,5 @@ export function pngToAscii(
     console.log(`Palette cell size ${cell_width}w * ${cell_height}h`);
     console.log(`Output size ${width}w (fixed) * ${height}h`);
     const glyphs = createCharacterPortraits(cell_height, canvasFactory);
-    return renderAscii(png, width, glyphs);
+    return renderAscii(png, width, glyphs, distance_fn);
 }

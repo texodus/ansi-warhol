@@ -1,6 +1,8 @@
 import * as fs from "fs";
 import { PNG } from "pngjs";
 import { estimateAscii } from "./ascii";
+import { DISTANCE_FNS } from "./distance";
+import { EVALUTATE_FNS } from "./evaluate";
 import { nodeCanvasFactory } from "./node-canvas-factory";
 
 const args = process.argv.slice(2);
@@ -12,10 +14,16 @@ if (args.includes("--help") || args.includes("-h")) {
     console.log();
     console.log("Options:");
     console.log(
-        "  --width <n>    Output width in characters (default: image width)",
+        "  --width <n>       Output width in characters (default: image width)",
     );
-    console.log("  -h, --help     Show this help message");
-    console.log("  -v, --version  Show version number");
+    console.log(
+        `  --distance <fn>   Distance function: ${Object.keys(DISTANCE_FNS).join(", ")} (default: SSIM)`,
+    );
+    console.log(
+        `  --evaluate <fn>   Evaluate function: ${Object.keys(EVALUTATE_FNS).join(", ")} (default: KURTOSIS)`,
+    );
+    console.log("  -h, --help        Show this help message");
+    console.log("  -v, --version     Show version number");
     process.exit(0);
 }
 
@@ -50,6 +58,21 @@ function nextOutputPath(): string {
 
 const optWidth = parseArg(args, "--width");
 const outPath = parseStringArg(args, "--out") || nextOutputPath();
+const distanceArg = parseStringArg(args, "--distance") || "SSIM";
+const evaluateArg = parseStringArg(args, "--evaluate") || "KURTOSIS";
+
+if (!(distanceArg in DISTANCE_FNS)) {
+    console.error(`Error: Unknown distance function "${distanceArg}". Valid options: ${Object.keys(DISTANCE_FNS).join(", ")}`);
+    process.exit(1);
+}
+
+if (!(evaluateArg in EVALUTATE_FNS)) {
+    console.error(`Error: Unknown evaluate function "${evaluateArg}". Valid options: ${Object.keys(EVALUTATE_FNS).join(", ")}`);
+    process.exit(1);
+}
+
+const distance_fn = distanceArg as keyof typeof DISTANCE_FNS;
+const evaluate_fn = evaluateArg as keyof typeof EVALUTATE_FNS;
 const inputPath = args.pop();
 
 if (!inputPath) {
@@ -70,7 +93,7 @@ const buffer = fs.readFileSync(inputPath);
 const png = PNG.sync.read(buffer);
 const outWidth = optWidth ?? png.width;
 let ascii = "";
-for (ascii of estimateAscii(png, outWidth, nodeCanvasFactory)) {
+for (ascii of estimateAscii(png, outWidth, nodeCanvasFactory, evaluate_fn, distance_fn)) {
     fs.writeFileSync(outPath, ascii);
 }
 

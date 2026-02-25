@@ -14,7 +14,7 @@ export interface GlyphEntry {
 }
 
 
-export function histogramIntersection(
+function histogramIntersection(
     glyph: GlyphEntry,
     srcLum: Float32Array,
     n: number,
@@ -36,7 +36,7 @@ export function histogramIntersection(
     return -intersection;
 }
 
-export function ssimDistance(
+function ssimDistance(
     glyph: GlyphEntry,
     srcLum: Float32Array,
     n: number,
@@ -57,4 +57,10 @@ export function ssimDistance(
         -((2 * muS * muG + SSIM_C1) * (2 * sigSG + SSIM_C2)) /
         ((muS2 + muG * muG + SSIM_C1) * (sigS2 + sigG2 + SSIM_C2))
     );
+}
+
+
+export const DISTANCE_FNS = {
+    "SSIM": ssimDistance,
+    "HISTOGRAM": histogramIntersection
 }
