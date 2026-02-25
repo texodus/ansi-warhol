@@ -120,6 +120,7 @@
             browserCanvasFactory,
             DISTANCE_FNS,
             EVALUTATE_FNS,
+            WebGPURenderer,
         } from "./dist/utf8-painter.esm.js";
 
         const fileInput = document.getElementById("fileInput");
@@ -132,6 +133,17 @@
         const hiddenCanvas = document.getElementById("hiddenCanvas");
 
         let currentImageData = null;
+        let gpuRenderer = null;
+
+        // Try to initialize WebGPU
+        WebGPURenderer.create()
+            .then((r) => {
+                gpuRenderer = r;
+                console.log("WebGPU renderer initialized");
+            })
+            .catch((err) => {
+                console.warn("WebGPU not available, using CPU fallback:", err.message);
+            });
 
         for (const key of Object.keys(DISTANCE_FNS)) {
             const opt = document.createElement("option");
@@ -147,30 +159,57 @@
             evaluateSelect.appendChild(opt);
         }
 
+        async function runGPU(width, distance_fn, evaluate_fn) {
+            const t0 = performance.now();
+            for await (const ascii of gpuRenderer.estimateAscii(
+                currentImageData,
+                width,
+                browserCanvasFactory,
+                evaluate_fn,
+                distance_fn,
+            )) {
+                output.textContent = ascii;
+                status.textContent = `WebGPU — searching...`;
+            }
+            const ms = (performance.now() - t0).toFixed(0);
+            status.textContent = `Done (WebGPU) — ${width} columns in ${ms}ms`;
+        }
+
+        async function runCPU(width, distance_fn, evaluate_fn) {
+            const t0 = performance.now();
+            for (const ascii of estimateAscii(
+                currentImageData,
+                width,
+                browserCanvasFactory,
+                evaluate_fn,
+                distance_fn,
+            )) {
+                output.textContent = ascii;
+                status.textContent = `CPU — searching...`;
+                await new Promise(x => requestAnimationFrame(x));
+            }
+            const ms = (performance.now() - t0).toFixed(0);
+            status.textContent = `Done (CPU) — ${width} columns in ${ms}ms`;
+        }
+
         async function run() {
             if (!currentImageData) return;
 
             const width = parseInt(widthInput.value, 10) || 76;
-            status.textContent = "Converting... (this may take a moment)";
+            status.textContent = "Converting...";
             output.textContent = "";
 
             await new Promise((r) => setTimeout(r, 50));
             await document.fonts.ready;
 
+            const distance_fn = distanceSelect.value;
+            const evaluate_fn = evaluateSelect.value;
+
             try {
-                const distance_fn = distanceSelect.value;
-                const evaluate_fn = evaluateSelect.value;
-                for (const ascii of estimateAscii(
-                    currentImageData,
-                    width,
-                    browserCanvasFactory,
-                    evaluate_fn,
-                    distance_fn,
-                )) {
-                    console.log(ascii.length)
-                    output.textContent = ascii;
-                    status.textContent = `Done! ${width} columns.`;
-                    await new Promise(x => requestAnimationFrame(x));
+                if (gpuRenderer) {
+                    await runGPU(width, distance_fn, evaluate_fn);
+                } else {
+                    await runCPU(width, distance_fn, evaluate_fn);
                 }
             } catch (err) {
                 status.textContent = `Error: ${err.message}`;
@@ -195,7 +234,7 @@
                     0, 0, img.width, img.height
                 );
                 runBtn.disabled = false;
-                status.textContent = "Image loaded. Press Run to convert.";
+                status.textContent = `Image loaded. Press Run to convert.${gpuRenderer ? " (WebGPU)" : " (CPU)"}`;
             };
 
             img.onerror = () => {
