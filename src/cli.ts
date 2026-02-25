@@ -1,32 +1,6 @@
 import * as fs from "fs";
 import { PNG } from "pngjs";
-
-const ASCII_CHARS = " .:-=+*#%@";
-
-function samplePixel(png: PNG, x: number, y: number): number {
-    const idx = (png.width * y + x) * 4;
-    const r = png.data[idx];
-    const g = png.data[idx + 1];
-    const b = png.data[idx + 2];
-    const a = png.data[idx + 3];
-    return a === 0 ? 0 : (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-}
-
-function pngToAscii(png: PNG, width: number, height: number): string {
-    const lines: string[] = [];
-    for (let row = 0; row < height; row++) {
-        let line = "";
-        const srcY = Math.floor((row / height) * png.height);
-        for (let col = 0; col < width; col++) {
-            const srcX = Math.floor((col / width) * png.width);
-            const brightness = samplePixel(png, srcX, srcY);
-            const charIdx = Math.floor(brightness * (ASCII_CHARS.length - 1));
-            line += ASCII_CHARS[charIdx];
-        }
-        lines.push(line);
-    }
-    return lines.join("\n");
-}
+import { pngToAscii } from "./ascii";
 
 const args = process.argv.slice(2);
 
@@ -83,5 +57,13 @@ const outWidth = optWidth ?? png.width;
 const outHeight = optHeight ?? png.height;
 const ascii = pngToAscii(png, outWidth, outHeight);
 
-fs.writeFileSync("out.txt", ascii);
-console.log(`Rendered ${outWidth}x${outHeight} image to out.txt`);
+function nextOutputPath(): string {
+    if (!fs.existsSync("out.txt")) return "out.txt";
+    let i = 1;
+    while (fs.existsSync(`out_${i}.txt`)) i++;
+    return `out_${i}.txt`;
+}
+
+const outPath = nextOutputPath();
+fs.writeFileSync(outPath, ascii);
+console.log(`Rendered ${outWidth}x${outHeight} image to ${outPath}`);
