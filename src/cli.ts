@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import { PNG } from "pngjs";
 import { estimateAscii } from "./ascii";
+import { nodeCanvasFactory } from "./node-canvas-factory";
 
 const args = process.argv.slice(2);
 
@@ -68,9 +69,12 @@ if (!fs.existsSync(inputPath)) {
 const buffer = fs.readFileSync(inputPath);
 const png = PNG.sync.read(buffer);
 const outWidth = optWidth ?? png.width;
-const ascii = estimateAscii(png, outWidth);
+let ascii = "";
+for (ascii of estimateAscii(png, outWidth, nodeCanvasFactory)) {
+    fs.writeFileSync(outPath, ascii);
+}
 
-fs.writeFileSync(outPath, ascii);
+
 console.log(
     `Rendered ${outWidth}x${Math.ceil(ascii.length / outWidth)} image to ${outPath}`,
 );

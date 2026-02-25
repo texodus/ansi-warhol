@@ -1,7 +1,6 @@
-import { createCanvas } from "canvas";
-import * as fs from "fs";
-import { PNG } from "pngjs";
+import type { CanvasFactory } from "./canvas-factory";
 import { type GlyphEntry, ssimDistance } from "./distance";
+import type { RawImage } from "./types";
 
 const BLOCK_ELEMENTS = "▀▁▂▃▄▅▆▇█▉▊▋▌▍▎▏▐░▒▓▕▖▗▘▙▚▛▜▝▞▟";
 const GEOMETRIC_SHAPES = `■□▢▣▤▥▦▧▨▩▪▫▬▭▮▯▰▱▲△▴▵▶▷▸▹►▻▼▽▾▿◀◁◂◃◄◅◆◇◈◉◊○◌◍◎●◐◑◒◓◔◕◖◗◘◙◚◛◜◝◞◟◠◡◢◣◤◥◦◧◨◩
@@ -35,7 +34,7 @@ const ASCII_CHARS = [
 const FONT_RATIO = 0.4;
 
 function samplePixel(
-    png: PNG,
+    png: RawImage,
     glyphs: GlyphEntry[],
     x: number,
     y: number,
@@ -97,17 +96,19 @@ function samplePixel(
 }
 
 // Optimization 1: pre-compute luminance arrays and SSIM stats per glyph
-export function createCharacterPortraits(scale: number): GlyphEntry[] {
+export function createCharacterPortraits(
+    scale: number,
+    canvasFactory: CanvasFactory,
+): GlyphEntry[] {
     const w = Math.floor(scale * FONT_RATIO);
     const h = scale;
-    const canvas = createCanvas(w, h);
-    const ctx = canvas.getContext("2d");
+    const ctx = canvasFactory(w, h);
     ctx.font = `${scale}px JetBrains Mono`;
-    const base = ctx.measureText(" ").width;
+    const base = Math.floor(ctx.measureText(" ").width);
     const glyphs: GlyphEntry[] = [];
 
     for (const ch of ASCII_CHARS) {
-        if (ctx.measureText(ch).width !== base) {
+        if (Math.floor(ctx.measureText(ch).width) !== base) {
             continue;
         }
 
@@ -141,7 +142,7 @@ export function createCharacterPortraits(scale: number): GlyphEntry[] {
 }
 
 function renderAscii(
-    png: PNG,
+    png: RawImage,
     width: number,
     glyphs: GlyphEntry[],
     brightness: number = 0,
@@ -170,27 +171,6 @@ function renderAscii(
     return lines.join("\n");
 }
 
-// function countUnique(s: number[]): number {
-//     return ASCII_CHARS.length - new Set(s).size;
-// }
-
-// function chiSquaredGoF(xs: number[]): number {
-//     const n = xs.length;
-//     const counts = new Map<number, number>();
-//     for (let i = 0; i < n; i++) {
-//         counts.set(xs[i], (counts.get(xs[i]) || 0) + 1);
-//     }
-//     const k = counts.size;
-//     const expected = n / k;
-//     let chi2 = 0;
-//     for (const observed of counts.values()) {
-//         const d = observed - expected;
-//         chi2 += (d * d) / expected;
-//     }
-
-//     return chi2;
-// }
-
 function kurtosis(xs: number[]): number {
     const n = xs.length;
     const mean = xs.reduce((a, b) => a + b, 0) / n;
@@ -200,23 +180,28 @@ function kurtosis(xs: number[]): number {
     return 0 - (m4 / (m2 * m2) - 3);
 }
 
-export function estimateAscii(png: PNG, width: number): string {
+export function* estimateAscii(
+    png: RawImage,
+    width: number,
+    canvasFactory: CanvasFactory,
+): Generator<string> {
     const cell_width = Math.floor(png.width / width);
     const cell_height = Math.ceil(cell_width / FONT_RATIO);
-    const glyphs = createCharacterPortraits(cell_height);
+    const glyphs = createCharacterPortraits(cell_height, canvasFactory);
 
     let contrast = 4;
     let brightness = 0.1;
+    let ascii = "";
 
     // Optimization 3: brightness/contrast passed to renderAscii instead of allocating
-    // a new PNG via adjustImage on every iteration
+    // a new image on every iteration
     function f(c: number, b: number): number {
-        const ascii = renderAscii(png, width, glyphs, b, c);
-        fs.writeFileSync("out_temp.txt", ascii);
+        ascii = renderAscii(png, width, glyphs, b, c);
         return kurtosis(ascii.split("").map((x) => ASCII_CHARS.indexOf(x)));
     }
 
     const fc = f(contrast, brightness);
+    yield ascii;
     console.log(`Contrast ${contrast}, Brightness ${brightness}, Total ${fc}`);
 
     // Phase 1: Coarse grid search
@@ -235,6 +220,7 @@ export function estimateAscii(png: PNG, width: number): string {
             const c = cMin + ((cMax - cMin) * ci) / cSteps;
             const b = bMin + ((bMax - bMin) * bi) / bSteps;
             const val = f(c, b);
+            yield ascii;
             console.log(`  Search -- Contrast ${c}, Brightness ${b}, Total ${val}`);
             if (val > bestF) {
                 bestF = val;
@@ -252,6 +238,7 @@ export function estimateAscii(png: PNG, width: number): string {
             const c = Math.max(cMin, Math.min(cMax, bestC + ci * cRadius));
             const b = Math.max(bMin, Math.min(bMax, bestB + bi * bRadius));
             const val = f(c, b);
+            yield ascii;
             console.log(`  Refine -- Contrast ${c}, Brightness ${b}, Total ${val}`);
             if (val > bestF) {
                 bestF = val;
@@ -271,13 +258,16 @@ export function estimateAscii(png: PNG, width: number): string {
     return result;
 }
 
-export function pngToAscii(png: PNG, width: number): string {
-    fs.writeFileSync("debug.png", PNG.sync.write(png));
+export function pngToAscii(
+    png: RawImage,
+    width: number,
+    canvasFactory: CanvasFactory,
+): string {
     const cell_width = Math.floor(png.width / width);
     const cell_height = Math.ceil(cell_width / FONT_RATIO);
     const height = Math.round(png.height / cell_height);
     console.log(`Palette cell size ${cell_width}w * ${cell_height}h`);
     console.log(`Output size ${width}w (fixed) * ${height}h`);
-    const glyphs = createCharacterPortraits(cell_height);
+    const glyphs = createCharacterPortraits(cell_height, canvasFactory);
     return renderAscii(png, width, glyphs);
 }

@@ -1,5 +1,3 @@
-import { PNG } from "pngjs";
-
 const SSIM_C1 = 6.5025; // (0.01*255)^2
 const SSIM_C2 = 58.5225; // (0.03*255)^2
 

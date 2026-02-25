@@ -13,4 +13,13 @@ await esbuild.build({
   },
 });
 
-console.log("Build complete: dist/cli.cjs");
+await esbuild.build({
+  entryPoints: ["src/index.ts"],
+  bundle: true,
+  platform: "browser",
+  target: "es2020",
+  format: "esm",
+  outfile: "dist/utf8-painter.esm.js",
+});
+
+console.log("Build complete: dist/cli.cjs, dist/utf8-painter.esm.js");

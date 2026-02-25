@@ -1,21 +1,34 @@
 {
-    "name": "utf8-painter",
-    "version": "0.1.0",
-    "description": "A simple CLI tool",
-    "type": "module",
-    "bin": {
-        "utf8-painter": "./dist/cli.cjs"
-    },
-    "scripts": {
-        "build": "node build.mjs",
-        "start": "node dist/cli.cjs"
-    },
-    "devDependencies": {
-        "@types/pngjs": "^6.0.5",
-        "esbuild": "^0.24.0"
-    },
-    "dependencies": {
-        "canvas": "^3.2.1",
-        "pngjs": "^7.0.0"
+  "name": "utf8-painter",
+  "version": "0.2.0",
+  "description": "Convert images to Unicode ASCII art (Browser + Node.js)",
+  "type": "module",
+  "main": "dist/utf8-painter.esm.js",
+  "module": "dist/utf8-painter.esm.js",
+  "exports": {
+    ".": {
+      "import": "./dist/utf8-painter.esm.js",
+      "default": "./dist/utf8-painter.esm.js"
     }
+  },
+  "bin": {
+    "utf8-painter": "./dist/cli.cjs"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/cli.cjs",
+    "serve": "npm exec serve .",
+    "lint": "biome check src/",
+    "format": "biome check --write src/"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.4",
+    "@types/pngjs": "^6.0.5",
+    "esbuild": "^0.24.0",
+    "serve": "14.2.5"
+  },
+  "dependencies": {
+    "canvas": "^3.2.1",
+    "pngjs": "^7.0.0"
+  }
 }
