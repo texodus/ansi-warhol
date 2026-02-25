@@ -23,7 +23,6 @@ if (args.includes("--version") || args.includes("-v")) {
 }
 
 function parseArg(args: string[], name: string): number | undefined {
-    console.log(args)
     const idx = args.indexOf(name);
     if (idx === -1) return undefined;
     const val = parseInt(args[idx + 1], 10);
@@ -34,9 +33,26 @@ function parseArg(args: string[], name: string): number | undefined {
     return val;
 }
 
+
+
+function parseStringArg(args: string[], name: string): string | undefined {
+    const idx = args.indexOf(name);
+    if (idx === -1) return undefined;
+    return args[idx + 1];
+}
+
+
+function nextOutputPath(): string {
+    if (!fs.existsSync("out.txt")) return "out.txt";
+    let i = 1;
+    while (fs.existsSync(`out_${i}.txt`)) i++;
+    return `out_${i}.txt`;
+}
+
 const optWidth = parseArg(args, "--width");
 const optHeight = parseArg(args, "--height");
-const inputPath = args.find((a) => !a.startsWith("-") && a !== String(optWidth) && a !== String(optHeight));
+const outPath = parseStringArg(args, "--out") || nextOutputPath();
+const inputPath = args.pop();
 
 if (!inputPath) {
     console.error("Error: Please provide a path to a PNG file.");
@@ -46,6 +62,7 @@ if (!inputPath) {
 
 // npm run build && npm run start --  --width=100 --height=100 Cassius_Marcellus_Coolidge_-_Poker_Game_\(1894\).png
 
+console.log(`${inputPath} -> ${outPath}`)
 if (!fs.existsSync(inputPath)) {
     console.error(`Error: File not found: ${inputPath}`);
     process.exit(1);
@@ -54,16 +71,7 @@ if (!fs.existsSync(inputPath)) {
 const buffer = fs.readFileSync(inputPath);
 const png = PNG.sync.read(buffer);
 const outWidth = optWidth ?? png.width;
-const outHeight = optHeight ?? png.height;
-const ascii = pngToAscii(png, outWidth, outHeight);
+const ascii = pngToAscii(png, outWidth);
 
-function nextOutputPath(): string {
-    if (!fs.existsSync("out.txt")) return "out.txt";
-    let i = 1;
-    while (fs.existsSync(`out_${i}.txt`)) i++;
-    return `out_${i}.txt`;
-}
-
-const outPath = nextOutputPath();
 fs.writeFileSync(outPath, ascii);
-console.log(`Rendered ${outWidth}x${outHeight} image to ${outPath}`);
+console.log(`Rendered ${outWidth}x${Math.ceil(ascii.length / outWidth)} image to ${outPath}`);

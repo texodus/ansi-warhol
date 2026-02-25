@@ -1,15 +1,16 @@
 import * as esbuild from "esbuild";
 
 await esbuild.build({
-    entryPoints: ["src/cli.ts"],
-    bundle: true,
-    platform: "node",
-    target: "node18",
-    format: "cjs",
-    outfile: "dist/cli.cjs",
-    banner: {
-        js: "#!/usr/bin/env node",
-    },
+  entryPoints: ["src/cli.ts"],
+  bundle: true,
+  platform: "node",
+  target: "node18",
+  format: "cjs",
+  outfile: "dist/cli.cjs",
+  external: ["canvas"],
+  banner: {
+    js: "#!/usr/bin/env node",
+  },
 });
 
 console.log("Build complete: dist/cli.cjs");
