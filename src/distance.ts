@@ -57,7 +57,51 @@ function ssimDistance(
 	);
 }
 
+function sumOfSquares(
+	glyph: GlyphEntry,
+	srcLum: Float32Array,
+	n: number,
+): number {
+	const glyphLum = glyph.lum;
+	let sum = 0;
+	for (let i = 0; i < n; i++) {
+		const d = srcLum[i] - glyphLum[i];
+		sum += d * d;
+	}
+	return sum;
+}
+
+function sumOfAbsDiff(
+	glyph: GlyphEntry,
+	srcLum: Float32Array,
+	n: number,
+): number {
+	const glyphLum = glyph.lum;
+	let sum = 0;
+	for (let i = 0; i < n; i++) {
+		const d = srcLum[i] - glyphLum[i];
+		sum += d < 0 ? -d : d;
+	}
+	return sum;
+}
+
+function minimizeCrossCorrelation(
+	glyph: GlyphEntry,
+	srcLum: Float32Array,
+	n: number,
+): number {
+	const glyphLum = glyph.lum;
+	let sum = 0;
+	for (let i = 0; i < n; i++) {
+		sum += srcLum[i] * glyphLum[i];
+	}
+	return -sum;
+}
+
 export const DISTANCE_FNS = {
 	SSIM: ssimDistance,
 	HISTOGRAM: histogramIntersection,
+	SUM_OF_SQUARES: sumOfSquares,
+	SUM_OF_ABS_DIFF: sumOfAbsDiff,
+	MINIMIZE_CROSS_CORRELATION: minimizeCrossCorrelation,
 };

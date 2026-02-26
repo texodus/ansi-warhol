@@ -1,18 +1,27 @@
 /// <reference types="@webgpu/types" />
 
-import { ASCII_CHARS, createCharacterPortraits, FONT_RATIO } from "./ascii";
+import { ASCII_CHARS, computeStats, createCharacterPortraits, measureFontRatio } from "./ascii";
 import type { CanvasFactory } from "./canvas-factory";
 import type { DISTANCE_FNS, GlyphEntry } from "./distance";
 import { EVALUTATE_FNS } from "./evaluate";
-import type { RawImage } from "./types";
+import type { AsciiResult, AsciiStats, RawImage } from "./types";
 
 const WORKGROUP_SIZE = 64;
 
+const DISTANCE_FN_IDS: Record<string, number> = {
+	SSIM: 0,
+	HISTOGRAM: 1,
+	SUM_OF_SQUARES: 2,
+	SUM_OF_ABS_DIFF: 3,
+	MINIMIZE_CROSS_CORRELATION: 4,
+};
+
 function createShaderCode(
 	glyphN: number,
-	distanceFn: "SSIM" | "HISTOGRAM",
+	distanceFn: keyof typeof DISTANCE_FNS,
 ): string {
-	const distanceId = distanceFn === "SSIM" ? 0 : 1;
+	const distanceId = DISTANCE_FN_IDS[distanceFn] ?? 0;
+	console.log(distanceId);
 	return `
 const GLYPH_N: u32 = ${glyphN}u;
 const DISTANCE_FN: u32 = ${distanceId}u;
@@ -29,6 +38,7 @@ struct Uniforms {
     glyph_h: u32,
     num_glyphs: u32,
     num_grid_points: u32,
+    invert_image: u32,
 };
 
 struct GridPoint {
@@ -80,6 +90,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             var lum = 0.299 * r + 0.587 * g + 0.114 * b;
             lum = ((lum / 255.0 + bp.brightness - 0.5) * bp.contrast + 0.5) * 255.0;
             lum = clamp(lum, 0.0, 255.0);
+            if (uniforms.invert_image != 0u) {
+                lum = 255.0 - lum;
+            }
             let i = gy * uniforms.glyph_w + gx;
             src_lum[i] = lum;
             sum_s += lum;
@@ -127,7 +140,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             let num = (2.0 * mu_s * mu_g + SSIM_C1) * (2.0 * sig_sg + SSIM_C2);
             let den = (mu_s2 + mu_g * mu_g + SSIM_C1) * (sig_s2 + sig_g2 + SSIM_C2);
             dist = -(num / den);
-        } else {
+        } else if (DISTANCE_FN == 1u) {
             // Histogram intersection distance
             var glyph_hist: array<f32, 16>;
             for (var hb: u32 = 0u; hb < HIST_BINS; hb++) {
@@ -143,6 +156,31 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                 intersection += min(src_hist[hb] / n_f, glyph_hist[hb] / n_f);
             }
             dist = -intersection;
+        } else if (DISTANCE_FN == 2u) {
+            // Sum of squares distance
+            let glyph_offset = gi * GLYPH_N;
+            var ssd: f32 = 0.0;
+            for (var i: u32 = 0u; i < GLYPH_N; i++) {
+                let d = src_lum[i] - glyph_lum[glyph_offset + i];
+                ssd += d * d;
+            }
+            dist = ssd;
+        } else if (DISTANCE_FN == 3u) {
+            // Sum of absolute differences
+            let glyph_offset = gi * GLYPH_N;
+            var sad: f32 = 0.0;
+            for (var i: u32 = 0u; i < GLYPH_N; i++) {
+                sad += abs(src_lum[i] - glyph_lum[glyph_offset + i]);
+            }
+            dist = sad;
+        } else {
+            // Minimize cross-correlation
+            let glyph_offset = gi * GLYPH_N;
+            var cc: f32 = 0.0;
+            for (var i: u32 = 0u; i < GLYPH_N; i++) {
+                cc += src_lum[i] * glyph_lum[glyph_offset + i];
+            }
+            dist = -cc;
         }
 
         if (dist < best_dist) {
@@ -168,11 +206,18 @@ export class WebGPURenderer {
 		if (!navigator.gpu) {
 			throw new Error("WebGPU is not supported in this browser");
 		}
+
 		const adapter = await navigator.gpu.requestAdapter();
 		if (!adapter) {
 			throw new Error("Failed to get WebGPU adapter");
 		}
-		const device = await adapter.requestDevice();
+
+		const device = await adapter.requestDevice({
+			requiredLimits: {
+				maxStorageBufferBindingSize: 4294967292
+			}
+		});
+
 		return new WebGPURenderer(device);
 	}
 
@@ -201,6 +246,7 @@ export class WebGPURenderer {
 		distanceFn: keyof typeof DISTANCE_FNS,
 		gridWidth: number,
 		gridHeight: number,
+		invertImage: boolean = false,
 	): Promise<Uint32Array> {
 		const device = this.device;
 		const glyphW = glyphs[0].width;
@@ -243,7 +289,7 @@ export class WebGPURenderer {
 		});
 		device.queue.writeBuffer(glyphStatsBuffer, 0, glyphStatsData);
 
-		// Uniforms (8 × u32 = 32 bytes, aligned to 16)
+		// Uniforms (9 × u32 = 36 bytes)
 		const uniformData = new Uint32Array([
 			png.width,
 			png.height,
@@ -253,6 +299,7 @@ export class WebGPURenderer {
 			glyphH,
 			numGlyphs,
 			numGridPoints,
+			invertImage ? 1 : 0,
 		]);
 		const uniformBuffer = device.createBuffer({
 			size: uniformData.byteLength,
@@ -356,10 +403,12 @@ export class WebGPURenderer {
 		distance_fn: keyof typeof DISTANCE_FNS,
 		brightness = 0,
 		contrast = 1,
-	): Promise<string> {
+		fontRatio = 0.5,
+		invertImage = false,
+	): Promise<{ ascii: string; stats: AsciiStats }> {
 		const cell_width = Math.floor(png.width / width);
-		const cell_height = Math.ceil(cell_width / FONT_RATIO);
-		const height = Math.round(png.height / cell_height);
+		const cell_height = Math.ceil(cell_width / fontRatio);
+		const height = Math.round(png.height / (cell_width / fontRatio));
 
 		const indices = await this.dispatch(
 			png,
@@ -368,9 +417,12 @@ export class WebGPURenderer {
 			distance_fn,
 			width,
 			height,
+			invertImage,
 		);
 
-		return this.indicesToString(indices, glyphs, width, height);
+		const ascii = this.indicesToString(indices, glyphs, width, height);
+		const stats = computeStats(ascii, cell_width, cell_height, width, height, glyphs.length);
+		return { ascii, stats };
 	}
 
 	async *estimateAscii(
@@ -379,11 +431,17 @@ export class WebGPURenderer {
 		canvasFactory: CanvasFactory,
 		evaluate_fn: keyof typeof EVALUTATE_FNS,
 		distance_fn: keyof typeof DISTANCE_FNS,
-	): AsyncGenerator<string, string> {
+		chars: string[] = ASCII_CHARS,
+		fontRatio?: number,
+		invertGlyphs: boolean = false,
+		invertImage: boolean = false,
+		fontName: string = "monospace",
+	): AsyncGenerator<AsciiResult, AsciiResult> {
+		const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
 		const cell_width = Math.floor(png.width / width);
-		const cell_height = Math.ceil(cell_width / FONT_RATIO);
-		const height = Math.round(png.height / cell_height);
-		const glyphs = createCharacterPortraits(cell_height, canvasFactory);
+		const cell_height = Math.ceil(cell_width / ratio);
+		const height = Math.round(png.height / (cell_width / ratio));
+		const glyphs = createCharacterPortraits(cell_height, canvasFactory, chars, ratio, invertGlyphs, fontName);
 		const totalCells = width * height;
 
 		function evaluate(ascii: string): number {
@@ -391,7 +449,7 @@ export class WebGPURenderer {
 				ascii
 					.split("")
 					.filter((x) => x !== "\n")
-					.map((x) => ASCII_CHARS.indexOf(x)),
+					.map((x) => glyphs.findIndex(y => y.char === x)!),
 			);
 		}
 
@@ -419,6 +477,7 @@ export class WebGPURenderer {
 			distance_fn,
 			width,
 			height,
+			invertImage,
 		);
 
 		// Evaluate each grid point on CPU
@@ -444,7 +503,8 @@ export class WebGPURenderer {
 			}
 		}
 
-		yield bestAscii;
+		let stats = computeStats(bestAscii, cell_width, cell_height, width, height, glyphs.length);
+		yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
 
 		// Phase 2: Refine around the best point — 25 points in one dispatch
 		const cRadius = (cMax - cMin) / cSteps / 2;
@@ -466,6 +526,7 @@ export class WebGPURenderer {
 			distance_fn,
 			width,
 			height,
+			invertImage,
 		);
 
 		for (let i = 0; i < refinePoints.length; i++) {
@@ -489,8 +550,9 @@ export class WebGPURenderer {
 			`Final -- Contrast ${bestC}, Brightness ${bestB}, Total ${bestF}`,
 		);
 
-		yield bestAscii;
-		return bestAscii;
+		stats = computeStats(bestAscii, cell_width, cell_height, width, height, glyphs.length);
+		yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
+		return { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
 	}
 
 	async pngToAscii(
@@ -498,11 +560,20 @@ export class WebGPURenderer {
 		width: number,
 		canvasFactory: CanvasFactory,
 		distance_fn: keyof typeof DISTANCE_FNS,
-	): Promise<string> {
+		chars: string[] = ASCII_CHARS,
+		fontRatio?: number,
+		invertGlyphs: boolean = false,
+		invertImage: boolean = false,
+		brightness: number = 0,
+		contrast: number = 1,
+		fontName: string = "monospace",
+	): Promise<AsciiResult> {
+		const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
 		const cell_width = Math.floor(png.width / width);
-		const cell_height = Math.ceil(cell_width / FONT_RATIO);
-		const glyphs = createCharacterPortraits(cell_height, canvasFactory);
-		return this.renderAscii(png, width, glyphs, distance_fn);
+		const cell_height = Math.ceil(cell_width / ratio);
+		const glyphs = createCharacterPortraits(cell_height, canvasFactory, chars, ratio, invertGlyphs, fontName);
+		const { ascii, stats } = await this.renderAscii(png, width, glyphs, distance_fn, brightness, contrast, ratio, invertImage);
+		return { ascii, brightness, contrast, stats };
 	}
 
 	destroy(): void {

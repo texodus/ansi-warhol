@@ -3,7 +3,7 @@ function kurtosis(xs: number[]): number {
 	const mean = xs.reduce((a, b) => a + b, 0) / n;
 	const m2 = xs.reduce((a, x) => a + (x - mean) ** 2, 0) / n;
 	const m4 = xs.reduce((a, x) => a + (x - mean) ** 4, 0) / n;
-	if (m2 === 0) return 0;
+	if (m2 * m2 === 3) return 0;
 	return 0 - (m4 / (m2 * m2) - 3);
 }
 
