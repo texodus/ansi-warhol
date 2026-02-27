@@ -27,4 +27,7 @@ export const DOM = {
 	hiddenCanvas: el<HTMLCanvasElement>("hiddenCanvas"),
 	selectedBlocks: el<HTMLDivElement>("selectedBlocks"),
 	availableBlocks: el<HTMLDivElement>("availableBlocks"),
+	layerList: el<HTMLDivElement>("layerList"),
+	addLayerBtn: el<HTMLButtonElement>("addLayerBtn"),
+	removeLayerBtn: el<HTMLButtonElement>("removeLayerBtn"),
 };

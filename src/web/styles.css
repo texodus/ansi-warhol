@@ -227,3 +227,73 @@ canvas {
 	color: #888;
 	font-size: 0.7rem;
 }
+
+.layer-panel {
+	border: 1px solid #0f3460;
+	border-radius: 4px;
+	background: #1a1a2e;
+}
+
+.layer-panel-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 0.4rem 0.5rem;
+	font-size: 0.8rem;
+	font-weight: bold;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #888;
+	border-bottom: 1px solid #0f3460;
+}
+
+.layer-panel-actions {
+	display: flex;
+	gap: 0.25rem;
+}
+
+.layer-panel-actions button {
+	width: auto;
+	padding: 0.1rem 0.5rem;
+	font-size: 0.9rem;
+}
+
+.layer-list {
+	display: flex;
+	flex-direction: column;
+	max-height: 200px;
+	overflow-y: auto;
+}
+
+.layer-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.4rem 0.5rem;
+	cursor: pointer;
+	font-size: 0.8rem;
+	border-bottom: 1px solid #0f3460;
+	user-select: none;
+}
+
+.layer-item:last-child {
+	border-bottom: none;
+}
+
+.layer-item:hover {
+	background: #1e2a4a;
+}
+
+.layer-item.selected {
+	background: #0f3460;
+}
+
+.layer-item.drag-over {
+	border-top: 2px solid #1a6fbf;
+}
+
+.layer-image-indicator {
+	color: #666;
+	font-size: 0.7rem;
+	font-style: italic;
+}

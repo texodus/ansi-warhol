@@ -2,3 +2,5 @@ node_modules/
 dist/
 samples
 index.html
+.vscode
+.DS_Store

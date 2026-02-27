@@ -449,7 +449,7 @@ export class WebGPURenderer {
 				ascii
 					.split("")
 					.filter((x) => x !== "\n")
-					.map((x) => glyphs.findIndex(y => y.char === x)!),
+					.map((x) => glyphs.findIndex(y => y.char === x)),
 			);
 		}
 

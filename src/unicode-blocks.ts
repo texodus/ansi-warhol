@@ -20,6 +20,9 @@
 //  ██⋡≹◘█████▇███▇▇▇▇▆◘∄▙●◕■▮●▇▇▆▇▆█▇░█▀█░█░█░▀▀█░░█░░░░█▄█░█▀█░█▀▄░█▀█░█░█░█░░
 //  ██▇●▆▇▇▇▆▙◘●∄◕∁◚∄≵●◘▇▇▇███████████░▀░▀░▀░▀░▀▀▀░▀▀▀░░░▀░▀░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀
 
+//  Copyright (c) 2026, the ANSI Warhol Authors. Distributed under the terms
+//  of the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
 // Unicode block definitions: [name, start, end] code point ranges.
 // Sourced from the Unicode 16.0 standard Blocks.txt.
 

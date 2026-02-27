@@ -11,5 +11,10 @@ export function browserCanvasFactory(
 	canvas.width = width;
 	canvas.height = height;
 	document.body.appendChild(canvas);
-	return canvas.getContext("2d")!;
+	const ctx = canvas.getContext("2d");
+	if (!ctx) {
+		throw new Error("Failed to get 2D canvas context");
+	}
+
+	return ctx;
 }

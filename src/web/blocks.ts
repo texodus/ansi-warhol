@@ -1,74 +1,84 @@
-import { buildCharList, DEFAULT_BLOCKS, UNICODE_BLOCKS } from "../index";
+import { DEFAULT_BLOCKS, UNICODE_BLOCKS } from "../index";
 import { DOM } from "./dom";
 
-// TODO refactor this module to be a class, instead of keeping state in module
-// scope.
+/**
+ * BlockPicker manages the Unicode block selection UI.
+ * It does NOT own the enabled state — it delegates to get/set callbacks
+ * so the caller (layer system) owns the block selection.
+ */
+export class BlockPicker {
+	private blockItems = new Map<string, HTMLDivElement>();
+	private getEnabled: () => Set<string>;
+	private setEnabled: (blocks: Set<string>) => void;
+	private onChange: () => void;
 
-const enabledBlocks = new Set(DEFAULT_BLOCKS);
-const blockItems = new Map<string, HTMLDivElement>();
+	constructor(
+		getEnabled: () => Set<string>,
+		setEnabled: (blocks: Set<string>) => void,
+		onChange: () => void,
+	) {
+		this.getEnabled = getEnabled;
+		this.setEnabled = setEnabled;
+		this.onChange = onChange;
 
-export function getSelectedChars(): string[] {
-	return [" ", ...buildCharList([...enabledBlocks])];
-}
-
-function createBlockItem(
-	name: string,
-	chars: string,
-	onChange: () => void,
-): HTMLDivElement {
-	const item = document.createElement("div");
-	item.className = "block-item";
-	const blockChars = [...chars].filter(
-		(x) => x !== "\n" && x !== " " && x !== "\t",
-	);
-	const nameSpan = document.createElement("span");
-	nameSpan.className = "block-name";
-	nameSpan.textContent = name;
-	const countSpan = document.createElement("span");
-	countSpan.className = "block-count";
-	countSpan.textContent = ` (${blockChars.length})`;
-	item.appendChild(nameSpan);
-	item.appendChild(countSpan);
-	item.addEventListener("click", () => {
-		if (enabledBlocks.has(name)) {
-			enabledBlocks.delete(name);
-		} else {
-			enabledBlocks.add(name);
+		for (const [name, chars] of Object.entries(UNICODE_BLOCKS)) {
+			this.blockItems.set(name, this.createBlockItem(name, chars));
 		}
-		renderBlockLists();
-		onChange();
-	});
-	return item;
-}
 
-function renderBlockLists() {
-	DOM.selectedBlocks.innerHTML = "";
-	DOM.availableBlocks.innerHTML = "";
-	for (const [name, item] of blockItems) {
-		if (enabledBlocks.has(name)) {
-			DOM.selectedBlocks.appendChild(item);
-		} else {
-			DOM.availableBlocks.appendChild(item);
+		this.renderBlockLists();
+
+		DOM.deselectAllBtn.addEventListener("click", () => {
+			this.setEnabled(new Set());
+			this.renderBlockLists();
+			this.onChange();
+		});
+
+		DOM.defaultsBtn.addEventListener("click", () => {
+			this.setEnabled(new Set(DEFAULT_BLOCKS));
+			this.renderBlockLists();
+			this.onChange();
+		});
+	}
+
+	private createBlockItem(name: string, chars: string): HTMLDivElement {
+		const item = document.createElement("div");
+		item.className = "block-item";
+		const blockChars = [...chars].filter(
+			(x) => x !== "\n" && x !== " " && x !== "\t",
+		);
+		const nameSpan = document.createElement("span");
+		nameSpan.className = "block-name";
+		nameSpan.textContent = name;
+		const countSpan = document.createElement("span");
+		countSpan.className = "block-count";
+		countSpan.textContent = ` (${blockChars.length})`;
+		item.appendChild(nameSpan);
+		item.appendChild(countSpan);
+		item.addEventListener("click", () => {
+			const enabled = this.getEnabled();
+			if (enabled.has(name)) {
+				enabled.delete(name);
+			} else {
+				enabled.add(name);
+			}
+			this.setEnabled(enabled);
+			this.renderBlockLists();
+			this.onChange();
+		});
+		return item;
+	}
+
+	/** Refresh the block list UI to match the current enabled set. */
+	renderBlockLists(): void {
+		const enabled = this.getEnabled();
+		DOM.selectedBlocks.innerHTML = "";
+		DOM.availableBlocks.innerHTML = "";
+		for (const [name, item] of this.blockItems) {
+			if (enabled.has(name)) {
+				DOM.selectedBlocks.appendChild(item);
+			} else {
+				DOM.availableBlocks.appendChild(item);
+			}
 		}
 	}
-}
-
-function setBlocks(names: string[], onChange: () => void) {
-	enabledBlocks.clear();
-	for (const name of names) enabledBlocks.add(name);
-	renderBlockLists();
-	onChange();
-}
-
-/** Initialize the block picker UI. Call once at startup. */
-export function initBlockPicker(onChange: () => void) {
-	for (const [name, chars] of Object.entries(UNICODE_BLOCKS)) {
-		blockItems.set(name, createBlockItem(name, chars, onChange));
-	}
-	renderBlockLists();
-
-	DOM.deselectAllBtn.addEventListener("click", () => setBlocks([], onChange));
-	DOM.defaultsBtn.addEventListener("click", () =>
-		setBlocks(DEFAULT_BLOCKS, onChange),
-	);
 }
