@@ -1,15 +1,31 @@
+//   ▁__▂▂▃◽▵▁▁▁▁▵▁◡◡◡◡▂__▁
+//  ▗▇◙▃◄F⊂⊟≣≣▁▂▂▂▂▁⊟g◥▬⊇g▂▋  ▐██████ ▐██████ ▐██████ ▐██
+//  ▐▆▅◘◘◒▇▇▆▆▆▆▆▆▆▆▆▇▇▄▅▅▆▌  ▐██ ▐██ ▐██ ▐██ ▐██     ▐██
+//  ▐▋▘▅▃▟█████████▛▀▐█▛7▃▟▌  ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▐▌▟D▜7▐▀▛╏▜▀7▜▀▖▐▀▞yy▍█▌  ▐██ ▐██ ▐██ ▐██     ▐██ ▐██
+//  ▐▇▆▙▅▄▙▟▟▃▚▟▄▙▃▅▃▄▄▄▅▆▇▌  ▐██ ▐██ ▐██ ▐██ ▐██████ ▐██
+//  ▐████⋡◘◘◘▙■▛▜◘◘▜◘▛▜████▌
+//  ▐████▇▆▆▆▆▲◼■▲▅▅▆▆▇████▌  ▐██  ▐██ ▐██████ ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▝▀◘▜████▛┇▅▚▟≽▝▜████▛◘▀▌  ▐██  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██
+//  │   ▔▔▔""1≦▅⋡▩√▝""▔▔   r  ▐██  ▐██ ▐██████ ▐██████ ▐██████ ▐██ ▐██ ▐██
+//  │        ▔^◠"▔         r  ▐██▐█▐██ ▐██ ▐██ ▐██▐██  ▐██ ▐██ ▐██ ▐██ ▐██
+//  │  ▗▄▂▃▁_▁▁▁ ▁▁_▂▂▃▃▎  ▍   ▐█████  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██████ ▐█████
+//  │  d▍▐▂▋▐▀▟▜▁▞▐▎▐▎▚▟▎  ▍
+//  │     ▔ ▔▔▔▔▔▔▔▔▔      ▍  Copyright (c) 2026, the `ansi-warhol` authors.
+//  ╽▁   ◀▆▴▗▄▃▂▄▖▄▗▄▅▎   ▁▍  This project is distributed under the terms of the
+//  ╰⋟▄▃▂▝◓▀▝◆▞▘╚L┛◂▀▔◡▁▂▃0╯  [MIT License](https://opensource.org/license/mit).
+//    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
+
 /**
  * Merge multiple ASCII art strings. Layers are ordered bottom-to-top.
  * Space = transparent. Non-space in higher layers overwrites lower.
  */
-export function mergeAsciiLayers(
-	layerResults: (string | null)[],
-): string {
+export function mergeAsciiLayers(layerResults: (string | null)[]): string {
 	const nonNull = layerResults.filter((s): s is string => s !== null);
 	if (nonNull.length === 0) return "";
 	if (nonNull.length === 1) return nonNull[0];
 
-	const allLines = nonNull.map((s) => s.split("\n"));
+	const allLines = nonNull.map((s) => s.split("\n").map((l) => [...l]));
 	const maxRows = Math.max(...allLines.map((l) => l.length));
 	const maxCols = Math.max(
 		...allLines.map((l) => Math.max(...l.map((r) => r.length), 0)),

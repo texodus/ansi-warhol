@@ -1,3 +1,21 @@
+//   ▁__▂▂▃◽▵▁▁▁▁▵▁◡◡◡◡▂__▁
+//  ▗▇◙▃◄F⊂⊟≣≣▁▂▂▂▂▁⊟g◥▬⊇g▂▋  ▐██████ ▐██████ ▐██████ ▐██
+//  ▐▆▅◘◘◒▇▇▆▆▆▆▆▆▆▆▆▇▇▄▅▅▆▌  ▐██ ▐██ ▐██ ▐██ ▐██     ▐██
+//  ▐▋▘▅▃▟█████████▛▀▐█▛7▃▟▌  ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▐▌▟D▜7▐▀▛╏▜▀7▜▀▖▐▀▞yy▍█▌  ▐██ ▐██ ▐██ ▐██     ▐██ ▐██
+//  ▐▇▆▙▅▄▙▟▟▃▚▟▄▙▃▅▃▄▄▄▅▆▇▌  ▐██ ▐██ ▐██ ▐██ ▐██████ ▐██
+//  ▐████⋡◘◘◘▙■▛▜◘◘▜◘▛▜████▌
+//  ▐████▇▆▆▆▆▲◼■▲▅▅▆▆▇████▌  ▐██  ▐██ ▐██████ ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▝▀◘▜████▛┇▅▚▟≽▝▜████▛◘▀▌  ▐██  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██
+//  │   ▔▔▔""1≦▅⋡▩√▝""▔▔   r  ▐██  ▐██ ▐██████ ▐██████ ▐██████ ▐██ ▐██ ▐██
+//  │        ▔^◠"▔         r  ▐██▐█▐██ ▐██ ▐██ ▐██▐██  ▐██ ▐██ ▐██ ▐██ ▐██
+//  │  ▗▄▂▃▁_▁▁▁ ▁▁_▂▂▃▃▎  ▍   ▐█████  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██████ ▐█████
+//  │  d▍▐▂▋▐▀▟▜▁▞▐▎▐▎▚▟▎  ▍
+//  │     ▔ ▔▔▔▔▔▔▔▔▔      ▍  Copyright (c) 2026, the `ansi-warhol` authors.
+//  ╽▁   ◀▆▴▗▄▃▂▄▖▄▗▄▅▎   ▁▍  This project is distributed under the terms of the
+//  ╰⋟▄▃▂▝◓▀▝◆▞▘╚L┛◂▀▔◡▁▂▃0╯  [MIT License](https://opensource.org/license/mit).
+//    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
+
 import * as fs from "fs";
 import { PNG } from "pngjs";
 import { estimateAscii } from "./ascii";
@@ -8,7 +26,7 @@ import { nodeCanvasFactory } from "./node-canvas-factory";
 const args = process.argv.slice(2);
 
 if (args.includes("--help") || args.includes("-h")) {
-	console.log("Usage: utf8-painter <image.png>");
+	console.log("Usage: ansi-warhol <image.png>");
 	console.log();
 	console.log("Renders a PNG image as ASCII art to out.txt");
 	console.log();
@@ -81,7 +99,7 @@ const inputPath = args.pop();
 
 if (!inputPath) {
 	console.error("Error: Please provide a path to a PNG file.");
-	console.error("Usage: utf8-painter <image.png>");
+	console.error("Usage: ansi-warhol <image.png>");
 	process.exit(1);
 }
 

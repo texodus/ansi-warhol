@@ -1,6 +1,20 @@
-
-
-
+//   ▁__▂▂▃◽▵▁▁▁▁▵▁◡◡◡◡▂__▁
+//  ▗▇◙▃◄F⊂⊟≣≣▁▂▂▂▂▁⊟g◥▬⊇g▂▋  ▐██████ ▐██████ ▐██████ ▐██
+//  ▐▆▅◘◘◒▇▇▆▆▆▆▆▆▆▆▆▇▇▄▅▅▆▌  ▐██ ▐██ ▐██ ▐██ ▐██     ▐██
+//  ▐▋▘▅▃▟█████████▛▀▐█▛7▃▟▌  ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▐▌▟D▜7▐▀▛╏▜▀7▜▀▖▐▀▞yy▍█▌  ▐██ ▐██ ▐██ ▐██     ▐██ ▐██
+//  ▐▇▆▙▅▄▙▟▟▃▚▟▄▙▃▅▃▄▄▄▅▆▇▌  ▐██ ▐██ ▐██ ▐██ ▐██████ ▐██
+//  ▐████⋡◘◘◘▙■▛▜◘◘▜◘▛▜████▌
+//  ▐████▇▆▆▆▆▲◼■▲▅▅▆▆▇████▌  ▐██  ▐██ ▐██████ ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▝▀◘▜████▛┇▅▚▟≽▝▜████▛◘▀▌  ▐██  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██
+//  │   ▔▔▔""1≦▅⋡▩√▝""▔▔   r  ▐██  ▐██ ▐██████ ▐██████ ▐██████ ▐██ ▐██ ▐██
+//  │        ▔^◠"▔         r  ▐██▐█▐██ ▐██ ▐██ ▐██▐██  ▐██ ▐██ ▐██ ▐██ ▐██
+//  │  ▗▄▂▃▁_▁▁▁ ▁▁_▂▂▃▃▎  ▍   ▐█████  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██████ ▐█████
+//  │  d▍▐▂▋▐▀▟▜▁▞▐▎▐▎▚▟▎  ▍
+//  │     ▔ ▔▔▔▔▔▔▔▔▔      ▍  Copyright (c) 2026, the `ansi-warhol` authors.
+//  ╽▁   ◀▆▴▗▄▃▂▄▖▄▗▄▅▎   ▁▍  This project is distributed under the terms of the
+//  ╰⋟▄▃▂▝◓▀▝◆▞▘╚L┛◂▀▔◡▁▂▃0╯  [MIT License](https://opensource.org/license/mit).
+//    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
 
 import type { CanvasFactory } from "./canvas-factory";
 import { DISTANCE_FNS, type GlyphEntry } from "./distance";
@@ -116,17 +130,15 @@ function samplePixel(
 }
 
 function mode(array: number[]): number | null {
-	if (array.length === 0)
-		return null;
+	if (array.length === 0) return null;
 
 	var modeMap: Record<number, number> = {};
-	var maxEl = array[0], maxCount = 1;
+	var maxEl = array[0],
+		maxCount = 1;
 	for (let i = 0; i < array.length; i++) {
 		let el = array[i];
-		if (modeMap[el] == null)
-			modeMap[el] = 1;
-		else
-			modeMap[el]++;
+		if (modeMap[el] == null) modeMap[el] = 1;
+		else modeMap[el]++;
 		if (modeMap[el] > maxCount) {
 			maxEl = el;
 			maxCount = modeMap[el];
@@ -152,7 +164,7 @@ export function createCharacterPortraits(
 	// const base = ctx.measureText("M").width;
 	const glyphs: GlyphEntry[] = [];
 
-	const charWidths = chars.map(x => ctx.measureText(x).width);
+	const charWidths = chars.map((x) => ctx.measureText(x).width);
 	const base = mode(charWidths);
 
 	for (const i in chars) {
@@ -189,7 +201,7 @@ export function createCharacterPortraits(
 		glyphs.push({ char: ch, lum, width: w, height: h, sumG, sumG2 });
 	}
 
-	console.log(glyphs.map(x => x.char));
+	console.log(glyphs.map((x) => x.char));
 
 	return glyphs;
 }
@@ -249,7 +261,14 @@ function renderAscii(
 		lines.push(line);
 	}
 	const ascii = lines.join("\n");
-	const stats = computeStats(ascii, cell_width, cell_height, width, height, glyphs.length);
+	const stats = computeStats(
+		ascii,
+		cell_width,
+		cell_height,
+		width,
+		height,
+		glyphs.length,
+	);
 	return { ascii, stats };
 }
 
@@ -268,15 +287,34 @@ export function* estimateAscii(
 	const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
 	const cell_width = Math.floor(png.width / width);
 	const cell_height = Math.ceil(cell_width / ratio);
-	const glyphs = createCharacterPortraits(cell_height, canvasFactory, chars, ratio, invertGlyphs, fontName);
+	const glyphs = createCharacterPortraits(
+		cell_height,
+		canvasFactory,
+		chars,
+		ratio,
+		invertGlyphs,
+		fontName,
+	);
 
 	let contrast = 4;
 	let brightness = 0.1;
 
 	// Optimization 3: brightness/contrast passed to renderAscii instead of allocating
 	// a new image on every iteration
-	function f(c: number, b: number): { val: number; ascii: string; stats: AsciiStats } {
-		const { ascii, stats } = renderAscii(png, width, glyphs, distance_fn, b, c, ratio, invertImage);
+	function f(
+		c: number,
+		b: number,
+	): { val: number; ascii: string; stats: AsciiStats } {
+		const { ascii, stats } = renderAscii(
+			png,
+			width,
+			glyphs,
+			distance_fn,
+			b,
+			c,
+			ratio,
+			invertImage,
+		);
 		const val = EVALUTATE_FNS[evaluate_fn](
 			ascii.split("").map((x) => chars.indexOf(x)),
 		);
@@ -285,7 +323,9 @@ export function* estimateAscii(
 
 	let cur = f(contrast, brightness);
 	yield { ascii: cur.ascii, brightness, contrast, stats: cur.stats };
-	console.log(`Contrast ${contrast}, Brightness ${brightness}, Total ${cur.val}`);
+	console.log(
+		`Contrast ${contrast}, Brightness ${brightness}, Total ${cur.val}`,
+	);
 
 	// Phase 1: Coarse grid search
 	let bestC = contrast,
@@ -304,7 +344,9 @@ export function* estimateAscii(
 			const b = bMin + ((bMax - bMin) * bi) / bSteps;
 			cur = f(c, b);
 			yield { ascii: cur.ascii, brightness: b, contrast: c, stats: cur.stats };
-			console.log(`  Search -- Contrast ${c}, Brightness ${b}, Total ${cur.val}`);
+			console.log(
+				`  Search -- Contrast ${c}, Brightness ${b}, Total ${cur.val}`,
+			);
 			if (cur.val > bestF) {
 				bestF = cur.val;
 				bestC = c;
@@ -322,7 +364,9 @@ export function* estimateAscii(
 			const b = Math.max(bMin, Math.min(bMax, bestB + bi * bRadius));
 			cur = f(c, b);
 			yield { ascii: cur.ascii, brightness: b, contrast: c, stats: cur.stats };
-			console.log(`  Refine -- Contrast ${c}, Brightness ${b}, Total ${cur.val}`);
+			console.log(
+				`  Refine -- Contrast ${c}, Brightness ${b}, Total ${cur.val}`,
+			);
 			if (cur.val > bestF) {
 				bestF = cur.val;
 				bestC = c;
@@ -334,9 +378,7 @@ export function* estimateAscii(
 	contrast = bestC;
 	brightness = bestB;
 	cur = f(contrast, brightness);
-	console.log(
-		`Final -- Contrast ${contrast}, Brightness ${brightness}`,
-	);
+	console.log(`Final -- Contrast ${contrast}, Brightness ${brightness}`);
 	return { ascii: cur.ascii, brightness, contrast, stats: cur.stats };
 }
 
@@ -359,7 +401,23 @@ export function pngToAscii(
 	const height = Math.round(png.height / (cell_width / ratio));
 	console.log(`Palette cell size ${cell_width}w * ${cell_height}h`);
 	console.log(`Output size ${width}w (fixed) * ${height}h`);
-	const glyphs = createCharacterPortraits(cell_height, canvasFactory, chars, ratio, invertGlyphs, fontName);
-	const { ascii, stats } = renderAscii(png, width, glyphs, distance_fn, brightness, contrast, ratio, invertImage);
+	const glyphs = createCharacterPortraits(
+		cell_height,
+		canvasFactory,
+		chars,
+		ratio,
+		invertGlyphs,
+		fontName,
+	);
+	const { ascii, stats } = renderAscii(
+		png,
+		width,
+		glyphs,
+		distance_fn,
+		brightness,
+		contrast,
+		ratio,
+		invertImage,
+	);
 	return { ascii, brightness, contrast, stats };
 }

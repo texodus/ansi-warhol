@@ -1,3 +1,21 @@
+//   ▁__▂▂▃◽▵▁▁▁▁▵▁◡◡◡◡▂__▁
+//  ▗▇◙▃◄F⊂⊟≣≣▁▂▂▂▂▁⊟g◥▬⊇g▂▋  ▐██████ ▐██████ ▐██████ ▐██
+//  ▐▆▅◘◘◒▇▇▆▆▆▆▆▆▆▆▆▇▇▄▅▅▆▌  ▐██ ▐██ ▐██ ▐██ ▐██     ▐██
+//  ▐▋▘▅▃▟█████████▛▀▐█▛7▃▟▌  ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▐▌▟D▜7▐▀▛╏▜▀7▜▀▖▐▀▞yy▍█▌  ▐██ ▐██ ▐██ ▐██     ▐██ ▐██
+//  ▐▇▆▙▅▄▙▟▟▃▚▟▄▙▃▅▃▄▄▄▅▆▇▌  ▐██ ▐██ ▐██ ▐██ ▐██████ ▐██
+//  ▐████⋡◘◘◘▙■▛▜◘◘▜◘▛▜████▌
+//  ▐████▇▆▆▆▆▲◼■▲▅▅▆▆▇████▌  ▐██  ▐██ ▐██████ ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▝▀◘▜████▛┇▅▚▟≽▝▜████▛◘▀▌  ▐██  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██
+//  │   ▔▔▔""1≦▅⋡▩√▝""▔▔   r  ▐██  ▐██ ▐██████ ▐██████ ▐██████ ▐██ ▐██ ▐██
+//  │        ▔^◠"▔         r  ▐██▐█▐██ ▐██ ▐██ ▐██▐██  ▐██ ▐██ ▐██ ▐██ ▐██
+//  │  ▗▄▂▃▁_▁▁▁ ▁▁_▂▂▃▃▎  ▍   ▐█████  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██████ ▐█████
+//  │  d▍▐▂▋▐▀▟▜▁▞▐▎▐▎▚▟▎  ▍
+//  │     ▔ ▔▔▔▔▔▔▔▔▔      ▍  Copyright (c) 2026, the `ansi-warhol` authors.
+//  ╽▁   ◀▆▴▗▄▃▂▄▖▄▗▄▅▎   ▁▍  This project is distributed under the terms of the
+//  ╰⋟▄▃▂▝◓▀▝◆▞▘╚L┛◂▀▔◡▁▂▃0╯  [MIT License](https://opensource.org/license/mit).
+//    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
+
 import {
 	buildCharList,
 	browserCanvasFactory,
@@ -9,6 +27,27 @@ import {
 import { DOM } from "./dom";
 import type { ConvertParams } from "./state";
 
+export type CharSource = "blocks" | "custom";
+
+/**
+ * Crop rectangle in units of the character grid width, so it stays put when
+ * the output width changes (rows scale with columns).
+ */
+export interface CropRect {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+export type CropOp = "union" | "subtract";
+
+/** One step of a crop region; steps are combined in order. */
+export interface CropShape {
+	op: CropOp;
+	rect: CropRect;
+}
+
 export interface LayerSettings {
 	imageData: ImageData | null;
 	brightness: number;
@@ -16,6 +55,11 @@ export interface LayerSettings {
 	invertImage: boolean;
 	distance_fn: keyof typeof DISTANCE_FNS;
 	enabledBlocks: Set<string>;
+	charSource: CharSource;
+	includeChars: string;
+	excludeChars: string;
+	/** Crop region steps; empty means uncropped. */
+	crop: CropShape[];
 }
 
 export interface Layer {
@@ -54,6 +98,10 @@ export function createDefaultLayerSettings(): LayerSettings {
 		invertImage: false,
 		distance_fn: "SSIM" as keyof typeof DISTANCE_FNS,
 		enabledBlocks: new Set(DEFAULT_BLOCKS),
+		charSource: "blocks",
+		includeChars: "",
+		excludeChars: "",
+		crop: [],
 	};
 }
 
@@ -65,6 +113,10 @@ function cloneLayerSettings(source: LayerSettings): LayerSettings {
 		invertImage: source.invertImage,
 		distance_fn: source.distance_fn,
 		enabledBlocks: new Set(source.enabledBlocks),
+		charSource: source.charSource,
+		includeChars: source.includeChars,
+		excludeChars: source.excludeChars,
+		crop: source.crop.map((s) => ({ op: s.op, rect: { ...s.rect } })),
 	};
 }
 
@@ -89,6 +141,11 @@ export function removeLayer(id: string): void {
 	}
 }
 
+export function renameLayer(id: string, name: string): void {
+	const layer = layerState.layers.find((l) => l.id === id);
+	if (layer) layer.name = name;
+}
+
 export function selectLayer(id: string): void {
 	layerState.selectedLayerId = id;
 }
@@ -103,9 +160,7 @@ export function getLayerState(): LayerState {
 }
 
 export function getSelectedLayer(): Layer | undefined {
-	return layerState.layers.find(
-		(l) => l.id === layerState.selectedLayerId,
-	);
+	return layerState.layers.find((l) => l.id === layerState.selectedLayerId);
 }
 
 export function getGlobalParams(): GlobalParams | null {
@@ -127,19 +182,33 @@ export function getGlobalParams(): GlobalParams | null {
 		fontName,
 		lineHeight,
 	);
-	const evaluate_fn =
-		DOM.evaluateSelect.value as keyof typeof EVALUTATE_FNS;
+	const evaluate_fn = DOM.evaluateSelect.value as keyof typeof EVALUTATE_FNS;
 
 	const invertGlyphs = DOM.invertGlyphsCheck.checked;
 
 	return { width, fontName, lineHeight, fontRatio, evaluate_fn, invertGlyphs };
 }
 
+/** Split text into unique, non-whitespace code points. */
+function parseChars(text: string): string[] {
+	return [...new Set([...text].filter((c) => !/\s/.test(c)))];
+}
+
+/** The layer's glyph palette (excluding the implicit space). */
+export function resolveChars(settings: LayerSettings): string[] {
+	const base =
+		settings.charSource === "custom"
+			? parseChars(settings.includeChars)
+			: buildCharList([...settings.enabledBlocks]);
+	const excluded = new Set(parseChars(settings.excludeChars));
+	return [...new Set(base)].filter((c) => !excluded.has(c));
+}
+
 export function buildConvertParams(
 	layer: Layer,
 	global: GlobalParams,
 ): ConvertParams {
-	const chars = [" ", ...buildCharList([...layer.settings.enabledBlocks])];
+	const chars = [" ", ...resolveChars(layer.settings)];
 	return {
 		...global,
 		chars,

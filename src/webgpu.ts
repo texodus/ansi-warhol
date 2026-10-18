@@ -1,6 +1,29 @@
+//   ▁__▂▂▃◽▵▁▁▁▁▵▁◡◡◡◡▂__▁
+//  ▗▇◙▃◄F⊂⊟≣≣▁▂▂▂▂▁⊟g◥▬⊇g▂▋  ▐██████ ▐██████ ▐██████ ▐██
+//  ▐▆▅◘◘◒▇▇▆▆▆▆▆▆▆▆▆▇▇▄▅▅▆▌  ▐██ ▐██ ▐██ ▐██ ▐██     ▐██
+//  ▐▋▘▅▃▟█████████▛▀▐█▛7▃▟▌  ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▐▌▟D▜7▐▀▛╏▜▀7▜▀▖▐▀▞yy▍█▌  ▐██ ▐██ ▐██ ▐██     ▐██ ▐██
+//  ▐▇▆▙▅▄▙▟▟▃▚▟▄▙▃▅▃▄▄▄▅▆▇▌  ▐██ ▐██ ▐██ ▐██ ▐██████ ▐██
+//  ▐████⋡◘◘◘▙■▛▜◘◘▜◘▛▜████▌
+//  ▐████▇▆▆▆▆▲◼■▲▅▅▆▆▇████▌  ▐██  ▐██ ▐██████ ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▝▀◘▜████▛┇▅▚▟≽▝▜████▛◘▀▌  ▐██  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██
+//  │   ▔▔▔""1≦▅⋡▩√▝""▔▔   r  ▐██  ▐██ ▐██████ ▐██████ ▐██████ ▐██ ▐██ ▐██
+//  │        ▔^◠"▔         r  ▐██▐█▐██ ▐██ ▐██ ▐██▐██  ▐██ ▐██ ▐██ ▐██ ▐██
+//  │  ▗▄▂▃▁_▁▁▁ ▁▁_▂▂▃▃▎  ▍   ▐█████  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██████ ▐█████
+//  │  d▍▐▂▋▐▀▟▜▁▞▐▎▐▎▚▟▎  ▍
+//  │     ▔ ▔▔▔▔▔▔▔▔▔      ▍  Copyright (c) 2026, the `ansi-warhol` authors.
+//  ╽▁   ◀▆▴▗▄▃▂▄▖▄▗▄▅▎   ▁▍  This project is distributed under the terms of the
+//  ╰⋟▄▃▂▝◓▀▝◆▞▘╚L┛◂▀▔◡▁▂▃0╯  [MIT License](https://opensource.org/license/mit).
+//    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
+
 /// <reference types="@webgpu/types" />
 
-import { ASCII_CHARS, computeStats, createCharacterPortraits, measureFontRatio } from "./ascii";
+import {
+	ASCII_CHARS,
+	computeStats,
+	createCharacterPortraits,
+	measureFontRatio,
+} from "./ascii";
 import type { CanvasFactory } from "./canvas-factory";
 import type { DISTANCE_FNS, GlyphEntry } from "./distance";
 import { EVALUTATE_FNS } from "./evaluate";
@@ -15,6 +38,28 @@ const DISTANCE_FN_IDS: Record<string, number> = {
 	SUM_OF_ABS_DIFF: 3,
 	MINIMIZE_CROSS_CORRELATION: 4,
 };
+
+//  ▆◘◘◘◘▛███████▇██▇▇▇▇▟▙●◉●▟▇▆▇▇▇███▇███████████████████████████████████▛▇████
+//  ▟▙◘▦∄⋠◘▇▇██▇██▇▇▇▇▛▛▇▇▇▇▇██▇███▇▇▇▇▆◙▟▇▇▙▇▓▇▇▇▇▇▇▇██████████████████████████
+//  ◘◘▙∄≵◛◖◕◘▙▇◙▇▇▇▇▇█▇▇▇▇▇▆●●▆▙●◘▇▇■▩▇●▇◘▇●●◘▙█▇▇▇▇█▇▇▇▇▇▇▇▇▇▇▇████████████████
+//  ●▦⊗≨⋧≵∱⋞◉◘▆▇██▇▇▇▇█▇▆◘●◘●≑◆◕◓▶◖◚◓◤◖◕∃∄≄≵◓◔◚◚∁∄⊂◚■◘◘▇█▇█▇▇███▇▇▆▙▓▇██████████
+//  ∄⊝≩◓●◘▆▇▇██▙◘▇▙▙▋▆▋◘●≋≎●●●▟▇▇▇▛▆▆▆▇▇▇▇▇▇▇▇▇▆▜◘●◕▝∻►◢▰◢∄●▆█▇▇███▇▇▇▇▇▇▇██████
+//  ◘▆▇▇████▇▇▆▇▙◘●∐∄∄◘◘▛▇▇▇▇▙◘∄◚∄▀▀●●▅▆▇█████████▇▇▇▇▇◘▟●◚◓≵≑∶◢●▇▇█████████████
+//  ███▇▆▆▙◘●◘■●●◕◛◘▇▇▇▇▆▙◘▩◚⋨◕≹⊗∛◯◯≔≎∶∕∼◞∁▆▇████████████▇▇▇▇▙▅▲▗∖≵▲◕●◘▆▇▇██████
+//  █▇██▇●●●◕≵≋◗▆◙▆▇▇▇◘◼●◘▟◘▦≹⊈⊙⋽∅⊚⋩⋚≨∇∛◎≎≁∕≒◚▇███████████████▇▆▇▆●►╲∼≻◆▟▇▇▇▇███
+//  ▇▟◘∄◥◛●◆≋∁◘▇▇▇██▇▇▇▆■≨≹∄⋟≨⊚⊈≋≴⋡≹≹⋡≨≹⋨≹⊙░⊝∕≻■█████████████████▇▆●◘∄∼⋅∷∻◛●▙▟▇▇
+//  ▇▆∄◘●≵⊂≺◘▙◘▇██▜■▆▇▇▇▇▙▙◘⋨⋖⋅     ∵◓▦◘⋡◘◉≹⊈≎∵◜▇███████████████████▇◘◘●► ⋅┈≐▲≵●
+//  █◘▇▟▩≋◕▛▛●▇██▇●⊁≎≹⋠⋡◉≨⋡▋◓         ▎◘▦⋩⊁▙◘⊗⋗ ▮█████████████████████▇◘◘◛∽ ∼∙◜∖
+//  ●◛∄⋟⊝≨▙◙≹████◘◓∴∶∛⋩⊚≹≹≊∁∝╾▎        ◘≹≹◉◘◘≩⋻ ●███████████████████████▇▲◉≊   ⋅
+//  ≽◛≄∕◡●█◘▇████●∁∴∕⋨⋠∛≹◘⋧ ┄    ⋅   ∽∄⋡⋡◉●◘▩≩◞▎██████████████████████████▖◘◘◖⋅∷
+//  ●▆◘∼∶▛▓▋█████●⊙◖┄⋳≹◘≹◘◘∄≲◜   ⋅▘◘▙◘◘◘∄◘◘●≵≷●▇████████████████████████▇▟▩◕∙∼∶∁
+//  ●●≊ ◢▓◘▆██████●⋞≎∅◉◘▆▩◘◘◘◘●◘▙◘●▙●≹⋡●◘◕●◘▇▇██████████████████████▇▇▆▅▲≐≐◓◕◘▙▇
+//  ⋡◘◓∵◉█≹▟███████▆◘◘▙▙▆▋▟◘◘◛●◘▙▙▇▆▙◘◉≄⋳◶◕▆▇██████████████████▇█▇▆◘◕≊≵▀▅▆▇█▇███
+//  ◉◘∁►∄█◘●██████████▇●⊙∶∻∨◛⋠≩≸≹●∄◉◕▼⋡▇██████████████▇▇▇▇▇▙▟◘●⋡▲◖◖■▆▇▇▇████████
+//  ◘◘┄≎◘◘∉◘█████████████▆■▀◖▲◖▃◖◓▮●◘▇██▇▇▇▆▆▆▙▙◘◘▆▆◘◘◼◕◕◖●▅⋡▆▇▇▇███████████████
+//  ▇▇◄◛▆≽▮▓██████████████▇▇▇▆◘■◘●■▙◘●░█▀█░█▀█░█▀▀░▀█▀░░░█░█░█▀█░█▀▄░█░█░█▀█░█░░
+//  ██⋡≹◘█████▇███▇▇▇▇▆◘∄▙●◕■▮●▇▇▆▇▆█▇░█▀█░█░█░▀▀█░░█░░░░█▄█░█▀█░█▀▄░█▀█░█░█░█░░
+//  ██▇●▆▇▇▇▆▙◘●∄◕∁◚∄≵●◘▇▇▇███████████░▀░▀░▀░▀░▀▀▀░▀▀▀░░░▀░▀░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀
 
 function createShaderCode(
 	glyphN: number,
@@ -214,8 +259,8 @@ export class WebGPURenderer {
 
 		const device = await adapter.requestDevice({
 			requiredLimits: {
-				maxStorageBufferBindingSize: 4294967292
-			}
+				maxStorageBufferBindingSize: 4294967292,
+			},
 		});
 
 		return new WebGPURenderer(device);
@@ -421,7 +466,14 @@ export class WebGPURenderer {
 		);
 
 		const ascii = this.indicesToString(indices, glyphs, width, height);
-		const stats = computeStats(ascii, cell_width, cell_height, width, height, glyphs.length);
+		const stats = computeStats(
+			ascii,
+			cell_width,
+			cell_height,
+			width,
+			height,
+			glyphs.length,
+		);
 		return { ascii, stats };
 	}
 
@@ -441,7 +493,14 @@ export class WebGPURenderer {
 		const cell_width = Math.floor(png.width / width);
 		const cell_height = Math.ceil(cell_width / ratio);
 		const height = Math.round(png.height / (cell_width / ratio));
-		const glyphs = createCharacterPortraits(cell_height, canvasFactory, chars, ratio, invertGlyphs, fontName);
+		const glyphs = createCharacterPortraits(
+			cell_height,
+			canvasFactory,
+			chars,
+			ratio,
+			invertGlyphs,
+			fontName,
+		);
 		const totalCells = width * height;
 
 		function evaluate(ascii: string): number {
@@ -449,7 +508,7 @@ export class WebGPURenderer {
 				ascii
 					.split("")
 					.filter((x) => x !== "\n")
-					.map((x) => glyphs.findIndex(y => y.char === x)),
+					.map((x) => glyphs.findIndex((y) => y.char === x)),
 			);
 		}
 
@@ -503,7 +562,14 @@ export class WebGPURenderer {
 			}
 		}
 
-		let stats = computeStats(bestAscii, cell_width, cell_height, width, height, glyphs.length);
+		let stats = computeStats(
+			bestAscii,
+			cell_width,
+			cell_height,
+			width,
+			height,
+			glyphs.length,
+		);
 		yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
 
 		// Phase 2: Refine around the best point — 25 points in one dispatch
@@ -550,7 +616,14 @@ export class WebGPURenderer {
 			`Final -- Contrast ${bestC}, Brightness ${bestB}, Total ${bestF}`,
 		);
 
-		stats = computeStats(bestAscii, cell_width, cell_height, width, height, glyphs.length);
+		stats = computeStats(
+			bestAscii,
+			cell_width,
+			cell_height,
+			width,
+			height,
+			glyphs.length,
+		);
 		yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
 		return { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
 	}
@@ -571,8 +644,24 @@ export class WebGPURenderer {
 		const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
 		const cell_width = Math.floor(png.width / width);
 		const cell_height = Math.ceil(cell_width / ratio);
-		const glyphs = createCharacterPortraits(cell_height, canvasFactory, chars, ratio, invertGlyphs, fontName);
-		const { ascii, stats } = await this.renderAscii(png, width, glyphs, distance_fn, brightness, contrast, ratio, invertImage);
+		const glyphs = createCharacterPortraits(
+			cell_height,
+			canvasFactory,
+			chars,
+			ratio,
+			invertGlyphs,
+			fontName,
+		);
+		const { ascii, stats } = await this.renderAscii(
+			png,
+			width,
+			glyphs,
+			distance_fn,
+			brightness,
+			contrast,
+			ratio,
+			invertImage,
+		);
 		return { ascii, brightness, contrast, stats };
 	}
 

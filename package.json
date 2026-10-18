@@ -1,18 +1,18 @@
 {
-  "name": "utf8-painter",
-  "version": "0.2.0",
+  "name": "ansi-warhol",
+  "version": "0.0.1",
   "description": "Convert images to Unicode ASCII art (Browser + Node.js)",
   "type": "module",
-  "main": "dist/utf8-painter.esm.js",
-  "module": "dist/utf8-painter.esm.js",
+  "main": "dist/ansi-warhol.esm.js",
+  "module": "dist/ansi-warhol.esm.js",
   "exports": {
     ".": {
-      "import": "./dist/utf8-painter.esm.js",
-      "default": "./dist/utf8-painter.esm.js"
+      "import": "./dist/ansi-warhol.esm.js",
+      "default": "./dist/ansi-warhol.esm.js"
     }
   },
   "bin": {
-    "utf8-painter": "./dist/cli.cjs"
+    "ansi-warhol": "./dist/cli.cjs"
   },
   "scripts": {
     "build": "node build.mjs",

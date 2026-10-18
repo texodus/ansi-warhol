@@ -292,8 +292,112 @@ canvas {
 	border-top: 2px solid #1a6fbf;
 }
 
+.layer-visible {
+	margin-right: 0.5rem;
+	accent-color: #1a6fbf;
+	cursor: pointer;
+}
+
+.layer-name {
+	flex: 1;
+	min-width: 0;
+}
+
+.layer-item.hidden-layer .layer-name,
+.layer-item.hidden-layer .layer-image-indicator {
+	opacity: 0.4;
+}
+
 .layer-image-indicator {
 	color: #666;
 	font-size: 0.7rem;
 	font-style: italic;
+}
+
+.layer-name-input {
+	flex: 1;
+	min-width: 0;
+	margin-right: 0.5rem;
+	padding: 0.1rem 0.25rem;
+	font: inherit;
+	background: #1a1a2e;
+	border: 1px solid #1a6fbf;
+	color: #eee;
+	border-radius: 3px;
+}
+
+.charset-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.char-count {
+	margin-left: auto;
+	color: #888;
+	font-size: 0.75rem;
+}
+
+.char-input {
+	width: 100%;
+	padding: 0.3rem;
+	font-family: monospace;
+	background: #1a1a2e;
+	border: 1px solid #0f3460;
+	color: #eee;
+	border-radius: 4px;
+	resize: vertical;
+}
+
+.output-wrap {
+	position: relative;
+}
+
+#output.cropping {
+	cursor: crosshair;
+	user-select: none;
+}
+
+.crop-overlay {
+	display: none;
+	position: absolute;
+	pointer-events: none;
+	border: 1px solid #1a6fbf;
+}
+
+.crop-overlay[data-mode="subtract"] {
+	border-color: #e0a030;
+	border-style: dashed;
+}
+
+.crop-mask {
+	display: none;
+	position: absolute;
+	pointer-events: none;
+	overflow: visible;
+}
+
+.crop-fill {
+	fill: rgba(26, 111, 191, 0.12);
+}
+
+.crop-edge {
+	fill: none;
+	stroke: #1a6fbf;
+	stroke-width: 1px;
+	stroke-dasharray: 4 3;
+	vector-effect: non-scaling-stroke;
+}
+
+.crop-hint {
+	color: #888;
+	font-size: 0.7rem;
+}
+
+.char-field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	font-size: 0.75rem;
+	color: #888;
 }

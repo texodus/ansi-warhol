@@ -1,13 +1,38 @@
+//   ▁__▂▂▃◽▵▁▁▁▁▵▁◡◡◡◡▂__▁
+//  ▗▇◙▃◄F⊂⊟≣≣▁▂▂▂▂▁⊟g◥▬⊇g▂▋  ▐██████ ▐██████ ▐██████ ▐██
+//  ▐▆▅◘◘◒▇▇▆▆▆▆▆▆▆▆▆▇▇▄▅▅▆▌  ▐██ ▐██ ▐██ ▐██ ▐██     ▐██
+//  ▐▋▘▅▃▟█████████▛▀▐█▛7▃▟▌  ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▐▌▟D▜7▐▀▛╏▜▀7▜▀▖▐▀▞yy▍█▌  ▐██ ▐██ ▐██ ▐██     ▐██ ▐██
+//  ▐▇▆▙▅▄▙▟▟▃▚▟▄▙▃▅▃▄▄▄▅▆▇▌  ▐██ ▐██ ▐██ ▐██ ▐██████ ▐██
+//  ▐████⋡◘◘◘▙■▛▜◘◘▜◘▛▜████▌
+//  ▐████▇▆▆▆▆▲◼■▲▅▅▆▆▇████▌  ▐██  ▐██ ▐██████ ▐██████ ▐██ ▐██ ▐██████ ▐██
+//  ▝▀◘▜████▛┇▅▚▟≽▝▜████▛◘▀▌  ▐██  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██
+//  │   ▔▔▔""1≦▅⋡▩√▝""▔▔   r  ▐██  ▐██ ▐██████ ▐██████ ▐██████ ▐██ ▐██ ▐██
+//  │        ▔^◠"▔         r  ▐██▐█▐██ ▐██ ▐██ ▐██▐██  ▐██ ▐██ ▐██ ▐██ ▐██
+//  │  ▗▄▂▃▁_▁▁▁ ▁▁_▂▂▃▃▎  ▍   ▐█████  ▐██ ▐██ ▐██ ▐██ ▐██ ▐██ ▐██████ ▐█████
+//  │  d▍▐▂▋▐▀▟▜▁▞▐▎▐▎▚▟▎  ▍
+//  │     ▔ ▔▔▔▔▔▔▔▔▔      ▍  Copyright (c) 2026, the `ansi-warhol` authors.
+//  ╽▁   ◀▆▴▗▄▃▂▄▖▄▗▄▅▎   ▁▍  This project is distributed under the terms of the
+//  ╰⋟▄▃▂▝◓▀▝◆▞▘╚L┛◂▀▔◡▁▂▃0╯  [MIT License](https://opensource.org/license/mit).
+//    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
+
 import {
-	pngToAscii,
-	estimateAscii,
 	browserCanvasFactory,
+	estimateAscii,
+	pngToAscii,
 	DISTANCE_FNS,
 	EVALUTATE_FNS,
 	WebGPURenderer,
 } from "../index";
 import type { AsciiStats } from "../index";
 import { DOM } from "./dom";
+import {
+	applyFontStyle,
+	bindSlider,
+	renderPreview,
+	renderStats,
+	updateOutputColors,
+} from "./view";
 import { gpuRenderer, setGpuRenderer } from "./state";
 import { BlockPicker } from "./blocks";
 import {
@@ -22,81 +47,8 @@ import {
 import type { Layer } from "./layers";
 import { initLayerList, renderLayerList } from "./layer-list";
 import { mergeAsciiLayers } from "./merge";
-
-// --- Helpers ---
-
-function bindSlider(
-	range: HTMLInputElement,
-	number: HTMLInputElement,
-	onChange: () => void,
-) {
-	range.addEventListener("input", () => {
-		number.value = range.value;
-		onChange();
-	});
-	number.addEventListener("input", () => {
-		range.value = number.value;
-	});
-	number.addEventListener("change", () => {
-		range.value = number.value;
-		onChange();
-	});
-}
-
-function applyFontStyle(fontName: string, lineHeight: number | "normal") {
-	DOM.output.style.fontFamily = `"${fontName}", monospace`;
-	DOM.output.style.lineHeight =
-		lineHeight === "normal" ? "normal" : String(lineHeight);
-}
-
-function renderStats(stats: AsciiStats) {
-	DOM.stats.style.display = "block";
-	DOM.stats.textContent =
-		`Cell: ${stats.cell_width}×${stats.cell_height}\n` +
-		`Grid: ${stats.width}×${stats.height}\n` +
-		`Chars: ${stats.chars} (${(stats.chars_ratio * 100).toFixed(1)}%)\n` +
-		`Unique: ${stats.unique_chars} (${(stats.unique_chars_ratio * 100).toFixed(1)}%)`;
-}
-
-function renderPreview(
-	imageData: ImageData,
-	brightness: number,
-	contrast: number,
-	invertImage: boolean,
-) {
-	const src = imageData;
-	DOM.preview.width = src.width;
-	DOM.preview.height = src.height;
-	DOM.preview.style.display = "block";
-	const ctx = DOM.preview.getContext("2d");
-	if (!ctx) return;
-	const out = ctx.createImageData(src.width, src.height);
-	for (let i = 0; i < src.data.length; i += 4) {
-		let lum =
-			0.299 * src.data[i] +
-			0.587 * src.data[i + 1] +
-			0.114 * src.data[i + 2];
-		lum = ((lum / 255 + brightness - 0.5) * contrast + 0.5) * 255;
-		if (lum < 0) lum = 0;
-		else if (lum > 255) lum = 255;
-		if (invertImage) lum = 255 - lum;
-		out.data[i] = lum;
-		out.data[i + 1] = lum;
-		out.data[i + 2] = lum;
-		out.data[i + 3] = 255;
-	}
-	ctx.putImageData(out, 0, 0);
-}
-
-function updateOutputColors() {
-	if (DOM.invertGlyphsCheck.checked) {
-		DOM.output.style.background = "#fff";
-		DOM.output.style.color = "#000";
-	} else {
-		DOM.output.style.background = "#000";
-		DOM.output.style.color = "";
-	}
-}
+import { CharsetControls } from "./charset";
+import { applyCrop, CropSelector } from "./crop";
 
 // --- Per-layer control sync ---
 
@@ -108,6 +60,8 @@ function populateControlsFromLayer(layer: Layer): void {
 	DOM.invertImageCheck.checked = layer.settings.invertImage;
 	DOM.distanceSelect.value = layer.settings.distance_fn;
 	blockPicker.renderBlockLists();
+	charsetControls.render();
+	cropSelector.render();
 	updateOutputColors();
 	if (layer.settings.imageData) {
 		renderPreview(
@@ -124,17 +78,16 @@ function populateControlsFromLayer(layer: Layer): void {
 function saveControlsToLayer(): void {
 	const layer = getSelectedLayer();
 	if (!layer) return;
-	layer.settings.brightness =
-		parseFloat(DOM.brightnessInput.value) || 0;
-	layer.settings.contrast =
-		parseFloat(DOM.contrastInput.value) || 1;
+	layer.settings.brightness = parseFloat(DOM.brightnessInput.value) || 0;
+	layer.settings.contrast = parseFloat(DOM.contrastInput.value) || 1;
 	layer.settings.invertImage = DOM.invertImageCheck.checked;
-	layer.settings.distance_fn =
-		DOM.distanceSelect.value as keyof typeof DISTANCE_FNS;
+	layer.settings.distance_fn = DOM.distanceSelect
+		.value as keyof typeof DISTANCE_FNS;
 }
 
 function onControlChange() {
 	saveControlsToLayer();
+	charsetControls.renderCount();
 	run();
 }
 
@@ -167,7 +120,8 @@ async function run() {
 			}
 
 			const p = buildConvertParams(layer, global);
-			if (p.chars.length === 0) {
+			// Space is always present; skip layers with no other glyphs
+			if (p.chars.length <= 1) {
 				layerResults.push(null);
 				continue;
 			}
@@ -186,12 +140,13 @@ async function run() {
 				p.fontName,
 			);
 
-			layerResults.push(result.ascii);
+			layerResults.push(applyCrop(result.ascii, layer.settings.crop));
 			lastStats = result.stats;
 		}
 
 		const merged = mergeAsciiLayers(layerResults);
 		DOM.output.textContent = merged;
+		cropSelector.render();
 
 		const selected = getSelectedLayer();
 		if (selected?.settings.imageData) {
@@ -221,7 +176,7 @@ async function autoFit() {
 	if (!global) return;
 
 	const p = buildConvertParams(selected, global);
-	if (p.chars.length === 0) return;
+	if (p.chars.length <= 1) return;
 
 	applyFontStyle(global.fontName, global.lineHeight);
 	DOM.status.textContent = "Auto-fitting brightness & contrast...";
@@ -255,7 +210,7 @@ async function autoFit() {
 				p.fontName,
 			)) {
 				result = r;
-				DOM.output.textContent = r.ascii;
+				DOM.output.textContent = applyCrop(r.ascii, selected.settings.crop);
 				renderPreview(
 					selected.settings.imageData,
 					r.brightness,
@@ -278,7 +233,7 @@ async function autoFit() {
 				p.fontName,
 			)) {
 				result = r;
-				DOM.output.textContent = r.ascii;
+				DOM.output.textContent = applyCrop(r.ascii, selected.settings.crop);
 				renderPreview(
 					selected.settings.imageData,
 					r.brightness,
@@ -329,6 +284,16 @@ const blockPicker = new BlockPicker(
 	onControlChange,
 );
 
+const charsetControls = new CharsetControls(
+	() => getSelectedLayer()?.settings,
+	run,
+);
+
+const cropSelector = new CropSelector(getSelectedLayer, () => {
+	renderLayerList();
+	run();
+});
+
 // Populate select dropdowns
 for (const key of Object.keys(DISTANCE_FNS)) {
 	const opt = document.createElement("option");
@@ -355,7 +320,7 @@ function onLayerSelect() {
 	if (layer) populateControlsFromLayer(layer);
 }
 
-initLayerList(onLayerSelect, run);
+initLayerList(onLayerSelect, run, run);
 
 // Layer panel buttons
 DOM.addLayerBtn.addEventListener("click", () => {
@@ -384,10 +349,7 @@ WebGPURenderer.create()
 		console.log("WebGPU renderer initialized");
 	})
 	.catch((err) => {
-		console.warn(
-			"WebGPU not available, using CPU fallback:",
-			err.message,
-		);
+		console.warn("WebGPU not available, using CPU fallback:", err.message);
 	});
 
 // File input — assigns to selected layer
@@ -408,12 +370,7 @@ DOM.fileInput.addEventListener("change", async (e) => {
 		const ctx = DOM.hiddenCanvas.getContext("2d");
 		if (!ctx) return;
 		ctx.drawImage(img, 0, 0);
-		layer.settings.imageData = ctx.getImageData(
-			0,
-			0,
-			img.width,
-			img.height,
-		);
+		layer.settings.imageData = ctx.getImageData(0, 0, img.width, img.height);
 		renderLayerList();
 		DOM.autoBtn.disabled = false;
 		run();

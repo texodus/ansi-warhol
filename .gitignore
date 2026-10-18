@@ -1,6 +1,5 @@
 node_modules/
 dist/
-samples
-index.html
+samples/
 .vscode
 .DS_Store
