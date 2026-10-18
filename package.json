@@ -1,7 +1,22 @@
 {
   "name": "ansi-warhol",
   "version": "0.0.1",
-  "description": "Convert images to Unicode ASCII art (Browser + Node.js)",
+  "description": "Convert images to Unicode text art (Browser + Node.js)",
+  "keywords": [
+    "ascii-art",
+    "ansi",
+    "unicode",
+    "text-art",
+    "image",
+    "webgpu",
+    "cli"
+  ],
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/texodus/ansi-warhol"
+	},
+
   "type": "module",
   "main": "dist/ansi-warhol.esm.js",
   "module": "dist/ansi-warhol.esm.js",
@@ -12,11 +27,18 @@
     }
   },
   "bin": {
-    "ansi-warhol": "./dist/cli.cjs"
+    "ansi-warhol": "./bin/ansi-warhol"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
     "build": "node build.mjs",
-    "start": "node dist/cli.cjs",
+    "start": "./bin/ansi-warhol",
     "serve": "npm exec serve .",
     "lint": "biome check src/",
     "format": "biome check --write src/"

@@ -19,6 +19,8 @@
 import * as esbuild from "esbuild";
 import { copyFileSync, readFileSync, writeFileSync } from "fs";
 
+const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
+
 await esbuild.build({
   entryPoints: ["src/cli.ts"],
   bundle: true,
@@ -27,6 +29,7 @@ await esbuild.build({
   format: "cjs",
   outfile: "dist/cli.cjs",
   external: ["canvas"],
+  define: { __VERSION__: JSON.stringify(pkg.version) },
   banner: {
     js: "#!/usr/bin/env node",
   },

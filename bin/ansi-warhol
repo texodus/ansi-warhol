@@ -1,0 +1,26 @@
+#!/bin/sh
+# ansi-warhol: render images as Unicode text art. Runs the bundled Node CLI
+# in dist/cli.cjs. Run `npm run build` first if it is missing.
+
+set -e
+
+# Follow symlinks (npm links bin scripts into node_modules/.bin or the global
+# prefix) to find this package's real location.
+script="$0"
+while [ -h "$script" ]; do
+	dir=$(cd -P "$(dirname "$script")" && pwd)
+	script=$(readlink "$script")
+	case "$script" in
+	/*) ;;
+	*) script="$dir/$script" ;;
+	esac
+done
+root=$(cd -P "$(dirname "$script")/.." && pwd)
+
+cli="$root/dist/cli.cjs"
+if [ ! -f "$cli" ]; then
+	echo "ansi-warhol: $cli not found; run \`npm run build\` in $root first." >&2
+	exit 1
+fi
+
+exec node "$cli" "$@"

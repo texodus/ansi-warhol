@@ -23,12 +23,14 @@ import { DISTANCE_FNS } from "./distance";
 import { EVALUTATE_FNS } from "./evaluate";
 import { nodeCanvasFactory } from "./node-canvas-factory";
 
+declare const __VERSION__: string;
+
 const args = process.argv.slice(2);
 
 if (args.includes("--help") || args.includes("-h")) {
-	console.log("Usage: ansi-warhol <image.png>");
+	console.log("Usage: ansi-warhol [options] <image.png>");
 	console.log();
-	console.log("Renders a PNG image as ASCII art to out.txt");
+	console.log("Renders a PNG image as Unicode text art to out.txt");
 	console.log();
 	console.log("Options:");
 	console.log(
@@ -40,13 +42,16 @@ if (args.includes("--help") || args.includes("-h")) {
 	console.log(
 		`  --evaluate <fn>   Evaluate function: ${Object.keys(EVALUTATE_FNS).join(", ")} (default: KURTOSIS)`,
 	);
+	console.log(
+		"  --out <file>      Output file (default: out.txt, or out_N.txt if taken)",
+	);
 	console.log("  -h, --help        Show this help message");
 	console.log("  -v, --version     Show version number");
 	process.exit(0);
 }
 
 if (args.includes("--version") || args.includes("-v")) {
-	console.log("0.1.0");
+	console.log(__VERSION__);
 	process.exit(0);
 }
 
@@ -99,7 +104,7 @@ const inputPath = args.pop();
 
 if (!inputPath) {
 	console.error("Error: Please provide a path to a PNG file.");
-	console.error("Usage: ansi-warhol <image.png>");
+	console.error("Usage: ansi-warhol [options] <image.png>");
 	process.exit(1);
 }
 
@@ -115,13 +120,14 @@ const buffer = fs.readFileSync(inputPath);
 const png = PNG.sync.read(buffer);
 const outWidth = optWidth ?? png.width;
 let ascii = "";
-for (ascii of estimateAscii(
+for (const result of estimateAscii(
 	png,
 	outWidth,
 	nodeCanvasFactory,
 	evaluate_fn,
 	distance_fn,
 )) {
+	ascii = result.ascii;
 	fs.writeFileSync(outPath, ascii);
 }
 
