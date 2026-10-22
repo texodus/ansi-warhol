@@ -94,6 +94,107 @@ var EVALUTATE_FNS = {
   CHISQUARED: chiSquaredGoF
 };
 
+// src/color.ts
+var MIN_COVERAGE = 1e-3;
+function solveCellColors(cellRGB, indices, glyphs, background, offset = 0) {
+  const cells = cellRGB.length / 3;
+  const out = new Uint8ClampedArray(cells * 3);
+  for (let i = 0; i < cells; i++) {
+    const alpha = glyphs[indices[offset + i]].coverage;
+    for (let c = 0; c < 3; c++) {
+      const target = cellRGB[i * 3 + c];
+      out[i * 3 + c] = alpha < MIN_COVERAGE ? background : background + (target - background) / alpha;
+    }
+  }
+  return out;
+}
+
+// src/grid.ts
+var MIN_GLYPH_RASTER_HEIGHT = 12;
+var MAX_GLYPH_RASTER_HEIGHT = 24;
+function gridGeometry(imageWidth, imageHeight, cols, fontRatio) {
+  const cellWidth = imageWidth / cols;
+  const idealCellHeight = cellWidth / fontRatio;
+  const rows = Math.max(1, Math.round(imageHeight / idealCellHeight));
+  const glyphRasterHeight = Math.min(
+    MAX_GLYPH_RASTER_HEIGHT,
+    Math.max(MIN_GLYPH_RASTER_HEIGHT, Math.round(idealCellHeight))
+  );
+  return {
+    cols,
+    rows,
+    cellWidth,
+    cellHeight: imageHeight / rows,
+    glyphRasterHeight
+  };
+}
+function boxTaps(srcN, dstN) {
+  const scale = srcN / dstN;
+  const taps = [];
+  for (let d = 0; d < dstN; d++) {
+    const a = d * scale;
+    const b = (d + 1) * scale;
+    const start = Math.floor(a);
+    const end = Math.min(srcN, Math.ceil(b));
+    const weights = new Float32Array(Math.max(1, end - start));
+    for (let s = start; s < end; s++) {
+      weights[s - start] = (Math.min(b, s + 1) - Math.max(a, s)) / scale;
+    }
+    taps.push({ start, weights });
+  }
+  return taps;
+}
+var LUMINANCE = [[0.299, 0.587, 0.114]];
+var RGB = [
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1]
+];
+function boxResample(png, dstW, dstH, channels) {
+  const srcW = png.width;
+  const srcH = png.height;
+  const data = png.data;
+  const nc = channels.length;
+  const xTaps = boxTaps(srcW, dstW);
+  const yTaps = boxTaps(srcH, dstH);
+  const tmp = new Float32Array(srcH * dstW * nc);
+  for (let y = 0; y < srcH; y++) {
+    const rowOffset = y * srcW;
+    for (let x = 0; x < dstW; x++) {
+      const { start, weights } = xTaps[x];
+      const o = (y * dstW + x) * nc;
+      for (let k = 0; k < weights.length; k++) {
+        const i = (rowOffset + start + k) * 4;
+        const w = weights[k];
+        for (let c = 0; c < nc; c++) {
+          const [wr, wg, wb] = channels[c];
+          tmp[o + c] += w * (wr * data[i] + wg * data[i + 1] + wb * data[i + 2]);
+        }
+      }
+    }
+  }
+  const rowLen = dstW * nc;
+  const out = new Float32Array(dstH * rowLen);
+  for (let y = 0; y < dstH; y++) {
+    const { start, weights } = yTaps[y];
+    const outOffset = y * rowLen;
+    for (let k = 0; k < weights.length; k++) {
+      const w = weights[k];
+      const srcOffset = (start + k) * rowLen;
+      for (let x = 0; x < rowLen; x++) {
+        out[outOffset + x] += w * tmp[srcOffset + x];
+      }
+    }
+  }
+  return out;
+}
+function resampleLuminance(png, dstW, dstH) {
+  return boxResample(png, dstW, dstH, LUMINANCE);
+}
+function resampleRGB(png, dstW, dstH) {
+  return boxResample(png, dstW, dstH, RGB);
+}
+
 // src/unicode-blocks.ts
 var BLOCK_RANGES = [
   ["Basic Latin", 0, 127],
@@ -463,49 +564,49 @@ var ASCII_CHARS = Object.values(UNICODE_BLOCKS).flatMap(parseBlockChars);
 function buildCharList(enabledBlocks) {
   return enabledBlocks.flatMap((name) => parseBlockChars(UNICODE_BLOCKS[name]));
 }
-function measureFontRatio(canvasFactory, fontName = "monospace", lineHeight = "normal") {
+function measureFont(canvasFactory, fontName, lineHeight) {
   const size = 100;
   const ctx = canvasFactory(size, size);
   ctx.font = `${size}px ${fontName}`;
   ctx.textRendering = "geometricPrecision";
   const metrics = ctx.measureText("M");
-  let effectiveHeight;
-  if (lineHeight === "normal") {
-    effectiveHeight = metrics.fontBoundingBoxAscent !== void 0 ? metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent : size * 1.2;
-  } else {
-    effectiveHeight = size * lineHeight;
-  }
-  return metrics.width / effectiveHeight;
+  const hasFontBox = metrics.fontBoundingBoxAscent !== void 0;
+  const ascent = hasFontBox ? metrics.fontBoundingBoxAscent / size : 0.8;
+  const descent = hasFontBox ? metrics.fontBoundingBoxDescent / size : 0.2;
+  const normal = hasFontBox ? ascent + descent : 1.2;
+  return {
+    advance: metrics.width / size,
+    ascent,
+    descent,
+    lineBox: lineHeight === "normal" ? normal : lineHeight
+  };
 }
-function samplePixel(png, glyphs, x, y, width, height, distance_fn, brightness = 0, contrast = 1, invertImage = false) {
-  const x0 = Math.floor(x / width * png.width);
-  const x1 = Math.floor((x + 1) / width * png.width);
-  const y0 = Math.floor(y / height * png.height);
-  const y1 = Math.floor((y + 1) / height * png.height);
-  const regionW = x1 - x0;
-  const regionH = y1 - y0;
+function measureFontRatio(canvasFactory, fontName = "monospace", lineHeight = "normal") {
+  const m = measureFont(canvasFactory, fontName, lineHeight);
+  return m.advance / m.lineBox;
+}
+function matchCell(lum, lumWidth, glyphs, col, row, distance_fn, brightness = 0, contrast = 1, invertImage = false) {
   const glyphW = glyphs[0].width;
   const glyphH = glyphs[0].height;
   const n = glyphW * glyphH;
+  const base = row * glyphH * lumWidth + col * glyphW;
   const srcLum = new Float32Array(n);
   let sumS = 0, sumS2 = 0;
   for (let gy = 0; gy < glyphH; gy++) {
-    const srcY = y0 + Math.floor(gy / glyphH * regionH);
+    const rowOffset = base + gy * lumWidth;
     for (let gx = 0; gx < glyphW; gx++) {
-      const srcX = x0 + Math.floor(gx / glyphW * regionW);
-      const srcIdx = (png.width * srcY + srcX) * 4;
-      let lum = 0.299 * png.data[srcIdx] + 0.587 * png.data[srcIdx + 1] + 0.114 * png.data[srcIdx + 2];
-      lum = ((lum / 255 + brightness - 0.5) * contrast + 0.5) * 255;
-      if (lum < 0) lum = 0;
-      else if (lum > 255) lum = 255;
-      if (invertImage) lum = 255 - lum;
+      let v = lum[rowOffset + gx];
+      v = ((v / 255 + brightness - 0.5) * contrast + 0.5) * 255;
+      if (v < 0) v = 0;
+      else if (v > 255) v = 255;
+      if (invertImage) v = 255 - v;
       const idx = gy * glyphW + gx;
-      srcLum[idx] = lum;
-      sumS += lum;
-      sumS2 += lum * lum;
+      srcLum[idx] = v;
+      sumS += v;
+      sumS2 += v * v;
     }
   }
-  let bestChar = " ";
+  let bestIndex = 0;
   let bestDist = Infinity;
   const muS = sumS / n;
   const muS2 = muS * muS;
@@ -521,10 +622,10 @@ function samplePixel(png, glyphs, x, y, width, height, distance_fn, brightness =
     );
     if (dist < bestDist) {
       bestDist = dist;
-      bestChar = glyphs[gi].char;
+      bestIndex = gi;
     }
   }
-  return bestChar;
+  return bestIndex;
 }
 function mode(array) {
   if (array.length === 0) return null;
@@ -541,12 +642,16 @@ function mode(array) {
   }
   return maxEl;
 }
-function createCharacterPortraits(scale, canvasFactory, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, fontName = "monospace") {
-  const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
-  const w = Math.floor(scale * ratio);
+function createCharacterPortraits(scale, canvasFactory, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, fontName = "monospace", lineHeight = "normal") {
+  const metrics = measureFont(canvasFactory, fontName, lineHeight);
+  const ratio = fontRatio ?? metrics.advance / metrics.lineBox;
+  const w = Math.max(1, Math.round(scale * ratio));
   const h = scale;
+  const fontSize = scale / metrics.lineBox;
+  const halfLeading = (metrics.lineBox - metrics.ascent - metrics.descent) / 2;
+  const baseline = (halfLeading + metrics.ascent) * fontSize;
   const ctx = canvasFactory(w, h);
-  ctx.font = `${scale}px ${fontName}`;
+  ctx.font = `${fontSize}px ${fontName}`;
   const glyphs = [];
   const charWidths = chars.map((x) => ctx.measureText(x).width);
   const base = mode(charWidths);
@@ -560,21 +665,23 @@ function createCharacterPortraits(scale, canvasFactory, chars = ASCII_CHARS, fon
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "white";
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(ch, w / 2, h / 2);
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(ch, w / 2, baseline);
     const imageData = ctx.getImageData(0, 0, w, h);
     const n = w * h;
     const lum = new Float32Array(n);
-    let sumG = 0, sumG2 = 0;
+    let sumG = 0, sumG2 = 0, ink = 0;
     for (let i2 = 0; i2 < n; i2++) {
       const idx = i2 * 4;
       let l = 0.299 * imageData.data[idx] + 0.587 * imageData.data[idx + 1] + 0.114 * imageData.data[idx + 2];
+      ink += l;
       if (invertGlyphs) l = 255 - l;
       lum[i2] = l;
       sumG += l;
       sumG2 += l * l;
     }
-    glyphs.push({ char: ch, lum, width: w, height: h, sumG, sumG2 });
+    const coverage = ink / (n * 255);
+    glyphs.push({ char: ch, lum, width: w, height: h, sumG, sumG2, coverage });
   }
   console.log(glyphs.map((x) => x.char));
   return glyphs;
@@ -593,72 +700,100 @@ function computeStats(ascii, cell_width, cell_height, width, height, numGlyphs) 
     unique_chars_ratio: uniqueChars / numGlyphs
   };
 }
-function renderAscii(png, width, glyphs, distance_fn, brightness = 0, contrast = 1, fontRatio = 0.5, invertImage = false) {
-  const cell_width = Math.floor(png.width / width);
-  const cell_height = Math.ceil(cell_width / fontRatio);
-  const height = Math.round(png.height / cell_height);
+function prepareRender(png, width, canvasFactory, chars, fontRatio, invertGlyphs, fontName, lineHeight, color = false) {
+  const geom = gridGeometry(png.width, png.height, width, fontRatio);
+  const glyphs = createCharacterPortraits(
+    geom.glyphRasterHeight,
+    canvasFactory,
+    chars,
+    fontRatio,
+    invertGlyphs,
+    fontName,
+    lineHeight
+  );
+  const lumWidth = geom.cols * glyphs[0].width;
+  const lum = resampleLuminance(png, lumWidth, geom.rows * glyphs[0].height);
+  const cellRGB = color ? resampleRGB(png, geom.cols, geom.rows) : null;
+  const background = invertGlyphs ? 255 : 0;
+  return { geom, glyphs, lum, lumWidth, cellRGB, background };
+}
+function preparedColors(prep, indices, offset = 0) {
+  if (!prep.cellRGB) return void 0;
+  return solveCellColors(
+    prep.cellRGB,
+    indices,
+    prep.glyphs,
+    prep.background,
+    offset
+  );
+}
+function preparedStats(prep, ascii) {
+  return computeStats(
+    ascii,
+    prep.geom.cellWidth,
+    prep.geom.cellHeight,
+    prep.geom.cols,
+    prep.geom.rows,
+    prep.glyphs.length
+  );
+}
+function renderAscii(prep, distance_fn, brightness = 0, contrast = 1, invertImage = false) {
+  const { geom, glyphs, lum, lumWidth } = prep;
+  const indices = new Uint32Array(geom.cols * geom.rows);
   const lines = [];
-  for (let row = 0; row < height; row++) {
+  for (let row = 0; row < geom.rows; row++) {
     let line = "";
-    for (let col = 0; col < width; col++) {
-      line += samplePixel(
-        png,
+    for (let col = 0; col < geom.cols; col++) {
+      const gi = matchCell(
+        lum,
+        lumWidth,
         glyphs,
         col,
         row,
-        width,
-        height,
         distance_fn,
         brightness,
         contrast,
         invertImage
       );
+      indices[row * geom.cols + col] = gi;
+      line += glyphs[gi].char;
     }
     lines.push(line);
   }
   const ascii = lines.join("\n");
-  const stats = computeStats(
-    ascii,
-    cell_width,
-    cell_height,
-    width,
-    height,
-    glyphs.length
-  );
-  return { ascii, stats };
+  const colors = preparedColors(prep, indices);
+  return { ascii, stats: preparedStats(prep, ascii), colors };
 }
-function* estimateAscii(png, width, canvasFactory, evaluate_fn, distance_fn, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, invertImage = false, fontName = "monospace") {
-  const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
-  const cell_width = Math.floor(png.width / width);
-  const cell_height = Math.ceil(cell_width / ratio);
-  const glyphs = createCharacterPortraits(
-    cell_height,
+function* estimateAscii(png, width, canvasFactory, evaluate_fn, distance_fn, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, invertImage = false, fontName = "monospace", lineHeight = "normal", color = false) {
+  const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName, lineHeight);
+  const prep = prepareRender(
+    png,
+    width,
     canvasFactory,
     chars,
     ratio,
     invertGlyphs,
-    fontName
+    fontName,
+    lineHeight,
+    color
   );
   let contrast = 4;
   let brightness = 0.1;
   function f(c, b) {
-    const { ascii, stats } = renderAscii(
-      png,
-      width,
-      glyphs,
+    const { ascii, stats, colors } = renderAscii(
+      prep,
       distance_fn,
       b,
       c,
-      ratio,
       invertImage
     );
     const val = EVALUTATE_FNS[evaluate_fn](
       ascii.split("").map((x) => chars.indexOf(x))
     );
-    return { val, ascii, stats };
+    return { val, ascii, stats, colors };
   }
   let cur = f(contrast, brightness);
-  yield { ascii: cur.ascii, brightness, contrast, stats: cur.stats };
+  yield { ascii: cur.ascii, brightness, contrast, stats: cur.stats, colors: cur.colors };
   console.log(
     `Contrast ${contrast}, Brightness ${brightness}, Total ${cur.val}`
   );
@@ -671,7 +806,7 @@ function* estimateAscii(png, width, canvasFactory, evaluate_fn, distance_fn, cha
       const c = cMin + (cMax - cMin) * ci / cSteps;
       const b = bMin + (bMax - bMin) * bi / bSteps;
       cur = f(c, b);
-      yield { ascii: cur.ascii, brightness: b, contrast: c, stats: cur.stats };
+      yield { ascii: cur.ascii, brightness: b, contrast: c, stats: cur.stats, colors: cur.colors };
       console.log(
         `  Search -- Contrast ${c}, Brightness ${b}, Total ${cur.val}`
       );
@@ -689,7 +824,7 @@ function* estimateAscii(png, width, canvasFactory, evaluate_fn, distance_fn, cha
       const c = Math.max(cMin, Math.min(cMax, bestC + ci * cRadius));
       const b = Math.max(bMin, Math.min(bMax, bestB + bi * bRadius));
       cur = f(c, b);
-      yield { ascii: cur.ascii, brightness: b, contrast: c, stats: cur.stats };
+      yield { ascii: cur.ascii, brightness: b, contrast: c, stats: cur.stats, colors: cur.colors };
       console.log(
         `  Refine -- Contrast ${c}, Brightness ${b}, Total ${cur.val}`
       );
@@ -704,34 +839,116 @@ function* estimateAscii(png, width, canvasFactory, evaluate_fn, distance_fn, cha
   brightness = bestB;
   cur = f(contrast, brightness);
   console.log(`Final -- Contrast ${contrast}, Brightness ${brightness}`);
-  return { ascii: cur.ascii, brightness, contrast, stats: cur.stats };
+  return { ascii: cur.ascii, brightness, contrast, stats: cur.stats, colors: cur.colors };
 }
-function pngToAscii(png, width, canvasFactory, distance_fn, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, invertImage = false, brightness = 0, contrast = 1, fontName = "monospace") {
-  const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
-  const cell_width = Math.floor(png.width / width);
-  const cell_height = Math.ceil(cell_width / ratio);
-  const height = Math.round(png.height / (cell_width / ratio));
-  console.log(`Palette cell size ${cell_width}w * ${cell_height}h`);
-  console.log(`Output size ${width}w (fixed) * ${height}h`);
-  const glyphs = createCharacterPortraits(
-    cell_height,
+function pngToAscii(png, width, canvasFactory, distance_fn, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, invertImage = false, brightness = 0, contrast = 1, fontName = "monospace", lineHeight = "normal", color = false) {
+  const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName, lineHeight);
+  const prep = prepareRender(
+    png,
+    width,
     canvasFactory,
     chars,
     ratio,
     invertGlyphs,
-    fontName
+    fontName,
+    lineHeight,
+    color
   );
-  const { ascii, stats } = renderAscii(
-    png,
-    width,
-    glyphs,
+  const { ascii, stats, colors } = renderAscii(
+    prep,
     distance_fn,
     brightness,
     contrast,
-    ratio,
     invertImage
   );
-  return { ascii, brightness, contrast, stats };
+  return { ascii, brightness, contrast, stats, colors };
+}
+
+// src/chargrid.ts
+function gridFromText(ascii, colors) {
+  const lines = ascii.split("\n").map((l) => [...l]);
+  if (!colors) return { lines, colors: null };
+  const cols = lines[0]?.length ?? 0;
+  return {
+    lines,
+    colors: lines.map((line, row) => {
+      const out = new Int32Array(line.length);
+      for (let col = 0; col < line.length; col++) {
+        const i = (row * cols + col) * 3;
+        out[col] = colors[i] << 16 | colors[i + 1] << 8 | colors[i + 2];
+      }
+      return out;
+    })
+  };
+}
+function gridToText(grid) {
+  return grid.lines.map((l) => l.join("")).join("\n");
+}
+function hex(color) {
+  return `#${color.toString(16).padStart(6, "0")}`;
+}
+function rgb(color) {
+  return [color >> 16 & 255, color >> 8 & 255, color & 255];
+}
+function colorRuns(line, colors) {
+  const runs = [];
+  let text = "";
+  let color = null;
+  for (let col = 0; col < line.length; col++) {
+    const ch = line[col];
+    if (ch !== " " && colors[col] !== color) {
+      if (text) runs.push({ text, color: color ?? -1 });
+      text = "";
+      color = colors[col];
+    }
+    text += ch;
+  }
+  if (text) runs.push({ text, color: color ?? -1 });
+  return runs;
+}
+var HTML_ESCAPES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;"
+};
+function escapeHtml(text) {
+  return text.replace(/[&<>]/g, (c) => HTML_ESCAPES[c]);
+}
+function gridToHtml(grid) {
+  if (!grid.colors) return escapeHtml(gridToText(grid));
+  const colors = grid.colors;
+  return grid.lines.map(
+    (line, row) => colorRuns(line, colors[row]).map(
+      ({ text, color }) => color < 0 ? escapeHtml(text) : `<span style="color:${hex(color)}">${escapeHtml(text)}</span>`
+    ).join("")
+  ).join("\n");
+}
+function gridToHtmlDocument(grid, style) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>ansi-warhol</title>
+</head>
+<body style="margin:0;background:${style.background}">
+<pre style="margin:0;padding:1rem;background:${style.background};color:${style.foreground};font-family:${style.fontFamily};line-height:${style.lineHeight}">${gridToHtml(grid)}</pre>
+</body>
+</html>
+`;
+}
+function gridToAnsi(grid, background, foreground) {
+  if (!grid.colors) return `${gridToText(grid)}
+`;
+  const colors = grid.colors;
+  const [br, bg, bb] = rgb(background);
+  return grid.lines.map((line, row) => {
+    let out = `\x1B[48;2;${br};${bg};${bb}m`;
+    for (const { text, color } of colorRuns(line, colors[row])) {
+      const [r, g, b] = rgb(color < 0 ? foreground : color);
+      out += `\x1B[38;2;${r};${g};${b}m${text}`;
+    }
+    return `${out}\x1B[0m`;
+  }).join("\n").concat("\n");
 }
 
 // src/canvas-factory.ts
@@ -767,8 +984,7 @@ const SSIM_C2: f32 = 58.5225;
 const HIST_BINS: u32 = 16u;
 
 struct Uniforms {
-    img_width: u32,
-    img_height: u32,
+    lum_width: u32,
     grid_width: u32,
     grid_height: u32,
     glyph_w: u32,
@@ -783,7 +999,8 @@ struct GridPoint {
     contrast: f32,
 };
 
-@group(0) @binding(0) var<storage, read> image: array<u32>;
+// Image luminance resampled so each cell is exactly glyph_w x glyph_h
+@group(0) @binding(0) var<storage, read> lum: array<f32>;
 @group(0) @binding(1) var<storage, read> glyph_lum: array<f32>;
 @group(0) @binding(2) var<storage, read> glyph_stats: array<vec2<f32>>;
 @group(0) @binding(3) var<uniform> uniforms: Uniforms;
@@ -804,12 +1021,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let row = cell_idx / uniforms.grid_width;
     let bp = grid_points[grid_point_idx];
 
-    let x0 = (col * uniforms.img_width) / uniforms.grid_width;
-    let x1 = ((col + 1u) * uniforms.img_width) / uniforms.grid_width;
-    let y0 = (row * uniforms.img_height) / uniforms.grid_height;
-    let y1 = ((row + 1u) * uniforms.img_height) / uniforms.grid_height;
-    let region_w = x1 - x0;
-    let region_h = y1 - y0;
+    let base = row * uniforms.glyph_h * uniforms.lum_width + col * uniforms.glyph_w;
 
     // Compute source luminance for this cell
     var src_lum: array<f32, ${glyphN}>;
@@ -817,23 +1029,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     var sum_s2: f32 = 0.0;
 
     for (var gy: u32 = 0u; gy < uniforms.glyph_h; gy++) {
-        let src_y = y0 + (gy * region_h) / uniforms.glyph_h;
+        let row_offset = base + gy * uniforms.lum_width;
         for (var gx: u32 = 0u; gx < uniforms.glyph_w; gx++) {
-            let src_x = x0 + (gx * region_w) / uniforms.glyph_w;
-            let pixel = image[uniforms.img_width * src_y + src_x];
-            let r = f32(pixel & 0xFFu);
-            let g = f32((pixel >> 8u) & 0xFFu);
-            let b = f32((pixel >> 16u) & 0xFFu);
-            var lum = 0.299 * r + 0.587 * g + 0.114 * b;
-            lum = ((lum / 255.0 + bp.brightness - 0.5) * bp.contrast + 0.5) * 255.0;
-            lum = clamp(lum, 0.0, 255.0);
+            var v = lum[row_offset + gx];
+            v = ((v / 255.0 + bp.brightness - 0.5) * bp.contrast + 0.5) * 255.0;
+            v = clamp(v, 0.0, 255.0);
             if (uniforms.invert_image != 0u) {
-                lum = 255.0 - lum;
+                v = 255.0 - v;
             }
             let i = gy * uniforms.glyph_w + gx;
-            src_lum[i] = lum;
-            sum_s += lum;
-            sum_s2 += lum * lum;
+            src_lum[i] = v;
+            sum_s += v;
+            sum_s2 += v * v;
         }
     }
 
@@ -965,8 +1172,11 @@ var WebGPURenderer = class _WebGPURenderer {
     }
     return pipeline;
   }
-  async dispatch(png, glyphs, gridPoints, distanceFn, gridWidth, gridHeight, invertImage = false) {
+  async dispatch(prep, gridPoints, distanceFn, invertImage = false) {
     const device = this.device;
+    const { glyphs, lum, lumWidth } = prep;
+    const gridWidth = prep.geom.cols;
+    const gridHeight = prep.geom.rows;
     const glyphW = glyphs[0].width;
     const glyphH = glyphs[0].height;
     const glyphN = glyphW * glyphH;
@@ -976,10 +1186,10 @@ var WebGPURenderer = class _WebGPURenderer {
     const totalItems = totalCells * numGridPoints;
     const pipeline = this.getPipeline(glyphN, distanceFn);
     const imageBuffer = device.createBuffer({
-      size: png.data.byteLength,
+      size: lum.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
-    device.queue.writeBuffer(imageBuffer, 0, new Uint8Array(png.data));
+    device.queue.writeBuffer(imageBuffer, 0, lum);
     const glyphLumData = new Float32Array(numGlyphs * glyphN);
     for (let i = 0; i < numGlyphs; i++) {
       glyphLumData.set(glyphs[i].lum, i * glyphN);
@@ -1000,8 +1210,7 @@ var WebGPURenderer = class _WebGPURenderer {
     });
     device.queue.writeBuffer(glyphStatsBuffer, 0, glyphStatsData);
     const uniformData = new Uint32Array([
-      png.width,
-      png.height,
+      lumWidth,
       gridWidth,
       gridHeight,
       glyphW,
@@ -1082,43 +1291,36 @@ var WebGPURenderer = class _WebGPURenderer {
     }
     return lines.join("\n");
   }
-  async renderAscii(png, width, glyphs, distance_fn, brightness = 0, contrast = 1, fontRatio = 0.5, invertImage = false) {
-    const cell_width = Math.floor(png.width / width);
-    const cell_height = Math.ceil(cell_width / fontRatio);
-    const height = Math.round(png.height / (cell_width / fontRatio));
+  async renderAscii(prep, distance_fn, brightness = 0, contrast = 1, invertImage = false) {
+    const { geom, glyphs } = prep;
     const indices = await this.dispatch(
-      png,
-      glyphs,
+      prep,
       [{ brightness, contrast }],
       distance_fn,
-      width,
-      height,
       invertImage
     );
-    const ascii = this.indicesToString(indices, glyphs, width, height);
-    const stats = computeStats(
+    const ascii = this.indicesToString(indices, glyphs, geom.cols, geom.rows);
+    return {
       ascii,
-      cell_width,
-      cell_height,
-      width,
-      height,
-      glyphs.length
-    );
-    return { ascii, stats };
+      stats: preparedStats(prep, ascii),
+      colors: preparedColors(prep, indices)
+    };
   }
-  async *estimateAscii(png, width, canvasFactory, evaluate_fn, distance_fn, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, invertImage = false, fontName = "monospace") {
-    const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
-    const cell_width = Math.floor(png.width / width);
-    const cell_height = Math.ceil(cell_width / ratio);
-    const height = Math.round(png.height / (cell_width / ratio));
-    const glyphs = createCharacterPortraits(
-      cell_height,
+  async *estimateAscii(png, width, canvasFactory, evaluate_fn, distance_fn, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, invertImage = false, fontName = "monospace", lineHeight = "normal", color = false) {
+    const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName, lineHeight);
+    const prep = prepareRender(
+      png,
+      width,
       canvasFactory,
       chars,
       ratio,
       invertGlyphs,
-      fontName
+      fontName,
+      lineHeight,
+      color
     );
+    const { glyphs } = prep;
+    const height = prep.geom.rows;
     const totalCells = width * height;
     function evaluate(ascii) {
       return EVALUTATE_FNS[evaluate_fn](
@@ -1137,16 +1339,15 @@ var WebGPURenderer = class _WebGPURenderer {
       }
     }
     const coarseIndices = await this.dispatch(
-      png,
-      glyphs,
+      prep,
       gridPoints,
       distance_fn,
-      width,
-      height,
       invertImage
     );
     let bestF = -Infinity;
     let bestAscii = "";
+    let bestIndices = new Uint32Array(0);
+    let bestOffset = 0;
     let bestC = 4;
     let bestB = 0.1;
     for (let i = 0; i < gridPoints.length; i++) {
@@ -1161,19 +1362,15 @@ var WebGPURenderer = class _WebGPURenderer {
       if (val > bestF) {
         bestF = val;
         bestAscii = ascii;
+        bestIndices = coarseIndices;
+        bestOffset = i * totalCells;
         bestC = gridPoints[i].contrast;
         bestB = gridPoints[i].brightness;
       }
     }
-    let stats = computeStats(
-      bestAscii,
-      cell_width,
-      cell_height,
-      width,
-      height,
-      glyphs.length
-    );
-    yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
+    let stats = preparedStats(prep, bestAscii);
+    let colors = preparedColors(prep, bestIndices, bestOffset);
+    yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats, colors };
     const cRadius = (cMax - cMin) / cSteps / 2;
     const bRadius = (bMax - bMin) / bSteps / 2;
     const refinePoints = [];
@@ -1185,12 +1382,9 @@ var WebGPURenderer = class _WebGPURenderer {
       }
     }
     const refineIndices = await this.dispatch(
-      png,
-      glyphs,
+      prep,
       refinePoints,
       distance_fn,
-      width,
-      height,
       invertImage
     );
     for (let i = 0; i < refinePoints.length; i++) {
@@ -1205,6 +1399,8 @@ var WebGPURenderer = class _WebGPURenderer {
       if (val > bestF) {
         bestF = val;
         bestAscii = ascii;
+        bestIndices = refineIndices;
+        bestOffset = i * totalCells;
         bestC = refinePoints[i].contrast;
         bestB = refinePoints[i].brightness;
       }
@@ -1212,40 +1408,39 @@ var WebGPURenderer = class _WebGPURenderer {
     console.log(
       `Final -- Contrast ${bestC}, Brightness ${bestB}, Total ${bestF}`
     );
-    stats = computeStats(
-      bestAscii,
-      cell_width,
-      cell_height,
-      width,
-      height,
-      glyphs.length
-    );
-    yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
-    return { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
+    stats = preparedStats(prep, bestAscii);
+    colors = preparedColors(prep, bestIndices, bestOffset);
+    const best = {
+      ascii: bestAscii,
+      brightness: bestB,
+      contrast: bestC,
+      stats,
+      colors
+    };
+    yield best;
+    return best;
   }
-  async pngToAscii(png, width, canvasFactory, distance_fn, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, invertImage = false, brightness = 0, contrast = 1, fontName = "monospace") {
-    const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
-    const cell_width = Math.floor(png.width / width);
-    const cell_height = Math.ceil(cell_width / ratio);
-    const glyphs = createCharacterPortraits(
-      cell_height,
+  async pngToAscii(png, width, canvasFactory, distance_fn, chars = ASCII_CHARS, fontRatio, invertGlyphs = false, invertImage = false, brightness = 0, contrast = 1, fontName = "monospace", lineHeight = "normal", color = false) {
+    const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName, lineHeight);
+    const prep = prepareRender(
+      png,
+      width,
       canvasFactory,
       chars,
       ratio,
       invertGlyphs,
-      fontName
+      fontName,
+      lineHeight,
+      color
     );
-    const { ascii, stats } = await this.renderAscii(
-      png,
-      width,
-      glyphs,
+    const { ascii, stats, colors } = await this.renderAscii(
+      prep,
       distance_fn,
       brightness,
       contrast,
-      ratio,
       invertImage
     );
-    return { ascii, brightness, contrast, stats };
+    return { ascii, brightness, contrast, stats, colors };
   }
   destroy() {
     this.device.destroy();
@@ -1293,7 +1488,12 @@ var DOM = {
   blockSelector: el("blockSelector"),
   cropBtn: el("cropBtn"),
   clearCropBtn: el("clearCropBtn"),
-  cropOverlay: el("cropOverlay")
+  cropOverlay: el("cropOverlay"),
+  newImageBtn: el("newImageBtn"),
+  copyBtn: el("copyBtn"),
+  saveBtn: el("saveBtn"),
+  saveFormat: el("saveFormat"),
+  colorCheck: el("colorCheck")
 };
 
 // src/web/view.ts
@@ -1316,7 +1516,7 @@ function applyFontStyle(fontName, lineHeight) {
 }
 function renderStats(stats) {
   DOM.stats.style.display = "block";
-  DOM.stats.textContent = `Cell: ${stats.cell_width}\xD7${stats.cell_height}
+  DOM.stats.textContent = `Cell: ${stats.cell_width.toFixed(1)}\xD7${stats.cell_height.toFixed(1)}px
 Grid: ${stats.width}\xD7${stats.height}
 Chars: ${stats.chars} (${(stats.chars_ratio * 100).toFixed(1)}%)
 Unique: ${stats.unique_chars} (${(stats.unique_chars_ratio * 100).toFixed(1)}%)`;
@@ -1437,6 +1637,7 @@ function createDefaultLayerSettings() {
     brightness: 0,
     contrast: 1,
     invertImage: false,
+    color: false,
     distance_fn: "SSIM",
     enabledBlocks: new Set(DEFAULT_BLOCKS),
     charSource: "blocks",
@@ -1451,6 +1652,7 @@ function cloneLayerSettings(source) {
     brightness: source.brightness,
     contrast: source.contrast,
     invertImage: source.invertImage,
+    color: source.color,
     distance_fn: source.distance_fn,
     enabledBlocks: new Set(source.enabledBlocks),
     charSource: source.charSource,
@@ -1469,6 +1671,11 @@ function addLayer(name, cloneFrom) {
   };
   layerState.layers.push(layer);
   return layer;
+}
+function resetLayers() {
+  layerState.layers = [];
+  nextLayerId = 1;
+  return addLayer();
 }
 function removeLayer(id) {
   const idx = layerState.layers.findIndex((l) => l.id === id);
@@ -1527,6 +1734,7 @@ function buildConvertParams(layer, global) {
     distance_fn: layer.settings.distance_fn,
     invertGlyphs: global.invertGlyphs,
     invertImage: layer.settings.invertImage,
+    color: layer.settings.color,
     brightness: layer.settings.brightness,
     contrast: layer.settings.contrast
   };
@@ -1650,30 +1858,64 @@ function initLayerList(onSelect, onReorder, onVisibilityChange) {
 }
 
 // src/web/merge.ts
-function mergeAsciiLayers(layerResults) {
-  const nonNull = layerResults.filter((s) => s !== null);
-  if (nonNull.length === 0) return "";
-  if (nonNull.length === 1) return nonNull[0];
-  const allLines = nonNull.map((s) => s.split("\n").map((l) => [...l]));
-  const maxRows = Math.max(...allLines.map((l) => l.length));
-  const maxCols = Math.max(
-    ...allLines.map((l) => Math.max(...l.map((r) => r.length), 0))
+function mergeGrids(layers) {
+  const grids = layers.filter((g) => g !== null);
+  if (grids.length === 0) return null;
+  if (grids.length === 1) return grids[0];
+  const rows = Math.max(...grids.map((g) => g.lines.length));
+  const cols = Math.max(
+    ...grids.map((g) => Math.max(0, ...g.lines.map((l) => l.length)))
   );
-  const result = [];
-  for (let row = 0; row < maxRows; row++) {
-    const chars = new Array(maxCols).fill(" ");
-    for (const lines of allLines) {
-      if (row >= lines.length) continue;
-      const line = lines[row];
+  const colored = grids.some((g) => g.colors);
+  const lines = [];
+  const colors = [];
+  for (let row = 0; row < rows; row++) {
+    const chars = new Array(cols).fill(" ");
+    const rowColors = new Int32Array(cols).fill(-1);
+    for (const grid of grids) {
+      const line = grid.lines[row];
+      if (!line) continue;
       for (let col = 0; col < line.length; col++) {
-        if (line[col] !== " ") {
-          chars[col] = line[col];
-        }
+        if (line[col] === " ") continue;
+        chars[col] = line[col];
+        rowColors[col] = grid.colors ? grid.colors[row][col] : -1;
       }
     }
-    result.push(chars.join(""));
+    lines.push(chars);
+    colors.push(rowColors);
   }
-  return result.join("\n");
+  return { lines, colors: colored ? colors : null };
+}
+
+// src/web/output.ts
+var current = null;
+function showGrid(grid) {
+  current = grid;
+  if (!grid) {
+    DOM.output.textContent = "";
+  } else if (grid.colors) {
+    DOM.output.innerHTML = gridToHtml(grid);
+  } else {
+    DOM.output.textContent = gridToText(grid);
+  }
+}
+function outputGrid() {
+  return current;
+}
+function outputColors() {
+  return DOM.invertGlyphsCheck.checked ? { background: 16777215, foreground: 0 } : { background: 0, foreground: 15658734 };
+}
+function hex2(color) {
+  return `#${color.toString(16).padStart(6, "0")}`;
+}
+function outputStyle() {
+  const { background, foreground } = outputColors();
+  return {
+    background: hex2(background),
+    foreground: hex2(foreground),
+    fontFamily: DOM.output.style.fontFamily || "monospace",
+    lineHeight: DOM.output.style.lineHeight || "normal"
+  };
 }
 
 // src/web/charset.ts
@@ -1770,14 +2012,19 @@ function combineCrop(crop, mode2, rect) {
   if (mode2 === "replace") return [{ op: "union", rect }];
   return [...crop, { op: mode2, rect }];
 }
-function applyCrop(ascii, crop) {
-  if (crop.length === 0) return ascii;
-  const lines = ascii.split("\n").map((l) => [...l]);
-  const cols = Math.max(0, ...lines.map((l) => l.length));
-  const mask = cropMask(crop, cols, lines.length);
-  return lines.map(
-    (line, row) => line.map((ch, col) => mask[row * cols + col] ? ch : " ").join("")
-  ).join("\n");
+function applyCrop(grid, crop) {
+  if (crop.length === 0) return grid;
+  const cols = Math.max(0, ...grid.lines.map((l) => l.length));
+  const mask = cropMask(crop, cols, grid.lines.length);
+  const kept = (row, col) => mask[row * cols + col] === 1;
+  return {
+    lines: grid.lines.map(
+      (line, row) => line.map((ch, col) => kept(row, col) ? ch : " ")
+    ),
+    colors: grid.colors?.map(
+      (rowColors, row) => rowColors.map((c, col) => kept(row, col) ? c : -1)
+    ) ?? null
+  };
 }
 function maskPaths(mask, cols, rows) {
   const at = (c, r) => c >= 0 && c < cols && r >= 0 && r < rows ? mask[r * cols + c] : 0;
@@ -1979,6 +2226,88 @@ var CropSelector = class {
   }
 };
 
+// src/web/statusbar.ts
+var DEFAULT_BASE_NAME = "ansi-warhol";
+var MIME_TYPES = {
+  txt: "text/plain;charset=utf-8",
+  ans: "text/plain;charset=utf-8",
+  html: "text/html;charset=utf-8"
+};
+function outputText() {
+  return DOM.output.textContent ?? "";
+}
+function saveFileName(format) {
+  const image = DOM.fileInput.files?.[0]?.name;
+  const base = image ? image.replace(/\.[^.]+$/, "") : DEFAULT_BASE_NAME;
+  return `${base}.${format}`;
+}
+function exportOutput(format) {
+  const grid = outputGrid();
+  if (!grid) return null;
+  if (format === "html") return gridToHtmlDocument(grid, outputStyle());
+  if (format === "ans") {
+    const { background, foreground } = outputColors();
+    return gridToAnsi(grid, background, foreground);
+  }
+  return gridToText(grid);
+}
+function flashStatus(message) {
+  DOM.status.textContent = message;
+}
+async function copyOutput() {
+  const grid = outputGrid();
+  if (!grid) return;
+  const text = gridToText(grid);
+  try {
+    if (grid.colors && typeof ClipboardItem !== "undefined") {
+      const s = outputStyle();
+      const html = `<pre style="background:${s.background};color:${s.foreground};font-family:${s.fontFamily};line-height:${s.lineHeight}">${gridToHtml(grid)}</pre>`;
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": new Blob([text], { type: "text/plain" }),
+          "text/html": new Blob([html], { type: "text/html" })
+        })
+      ]);
+    } else {
+      await navigator.clipboard.writeText(text);
+    }
+    flashStatus(`Copied ${text.split("\n").length} lines to the clipboard.`);
+  } catch (err) {
+    flashStatus(`Copy failed: ${err.message}`);
+  }
+}
+function saveOutput() {
+  const format = DOM.saveFormat.value;
+  const content = exportOutput(format);
+  if (content === null) return;
+  const blob = new Blob([content], { type: MIME_TYPES[format] });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = saveFileName(format);
+  link.click();
+  URL.revokeObjectURL(url);
+  flashStatus(`Saved ${link.download}.`);
+}
+function initStatusBar(onNewImage) {
+  const syncEnabled = () => {
+    const empty = outputText().length === 0;
+    DOM.copyBtn.disabled = empty;
+    DOM.saveBtn.disabled = empty;
+  };
+  new MutationObserver(syncEnabled).observe(DOM.output, {
+    childList: true,
+    characterData: true,
+    subtree: true
+  });
+  syncEnabled();
+  DOM.copyBtn.addEventListener("click", copyOutput);
+  DOM.saveBtn.addEventListener("click", saveOutput);
+  DOM.newImageBtn.addEventListener("click", () => {
+    if (onNewImage()) DOM.fileInput.value = "";
+  });
+}
+
 // src/web/app.ts
 function populateControlsFromLayer(layer) {
   DOM.brightnessInput.value = layer.settings.brightness.toFixed(2);
@@ -1986,6 +2315,7 @@ function populateControlsFromLayer(layer) {
   DOM.contrastInput.value = layer.settings.contrast.toFixed(2);
   DOM.contrastRange.value = layer.settings.contrast.toFixed(2);
   DOM.invertImageCheck.checked = layer.settings.invertImage;
+  DOM.colorCheck.checked = layer.settings.color;
   DOM.distanceSelect.value = layer.settings.distance_fn;
   blockPicker.renderBlockLists();
   charsetControls.render();
@@ -2008,12 +2338,19 @@ function saveControlsToLayer() {
   layer.settings.brightness = parseFloat(DOM.brightnessInput.value) || 0;
   layer.settings.contrast = parseFloat(DOM.contrastInput.value) || 1;
   layer.settings.invertImage = DOM.invertImageCheck.checked;
+  layer.settings.color = DOM.colorCheck.checked;
   layer.settings.distance_fn = DOM.distanceSelect.value;
 }
 function onControlChange() {
   saveControlsToLayer();
   charsetControls.renderCount();
   run();
+}
+function croppedGrid(result, layer) {
+  return applyCrop(
+    gridFromText(result.ascii, result.colors),
+    layer.settings.crop
+  );
 }
 async function run() {
   const state = getLayerState();
@@ -2050,13 +2387,14 @@ async function run() {
         p.invertImage,
         p.brightness,
         p.contrast,
-        p.fontName
+        p.fontName,
+        p.lineHeight,
+        p.color
       );
-      layerResults.push(applyCrop(result.ascii, layer.settings.crop));
+      layerResults.push(croppedGrid(result, layer));
       lastStats = result.stats;
     }
-    const merged = mergeAsciiLayers(layerResults);
-    DOM.output.textContent = merged;
+    showGrid(mergeGrids(layerResults));
     cropSelector.render();
     const selected = getSelectedLayer();
     if (selected?.settings.imageData) {
@@ -2085,7 +2423,7 @@ async function autoFit() {
   if (p.chars.length <= 1) return;
   applyFontStyle(global.fontName, global.lineHeight);
   DOM.status.textContent = "Auto-fitting brightness & contrast...";
-  DOM.output.textContent = "";
+  showGrid(null);
   await new Promise((r) => setTimeout(r, 50));
   await document.fonts.ready;
   try {
@@ -2103,10 +2441,12 @@ async function autoFit() {
         p.fontRatio,
         p.invertGlyphs,
         p.invertImage,
-        p.fontName
+        p.fontName,
+        p.lineHeight,
+        p.color
       )) {
         result = r;
-        DOM.output.textContent = applyCrop(r.ascii, selected.settings.crop);
+        showGrid(croppedGrid(r, selected));
         renderPreview(
           selected.settings.imageData,
           r.brightness,
@@ -2126,10 +2466,12 @@ async function autoFit() {
         p.fontRatio,
         p.invertGlyphs,
         p.invertImage,
-        p.fontName
+        p.fontName,
+        p.lineHeight,
+        p.color
       )) {
         result = r;
-        DOM.output.textContent = applyCrop(r.ascii, selected.settings.crop);
+        showGrid(croppedGrid(r, selected));
         renderPreview(
           selected.settings.imageData,
           r.brightness,
@@ -2194,9 +2536,24 @@ function onLayerSelect() {
   if (layer) populateControlsFromLayer(layer);
 }
 initLayerList(onLayerSelect, run, run);
+initStatusBar(() => {
+  const hasImages = getLayerState().layers.some((l) => l.settings.imageData);
+  if (hasImages && !confirm("Discard all layers and start a new image?")) {
+    return false;
+  }
+  const layer = resetLayers();
+  selectLayer(layer.id);
+  renderLayerList();
+  onLayerSelect();
+  showGrid(null);
+  DOM.stats.style.display = "none";
+  DOM.autoBtn.disabled = true;
+  DOM.status.textContent = "Select an image to begin.";
+  return true;
+});
 DOM.addLayerBtn.addEventListener("click", () => {
-  const current = getSelectedLayer();
-  const layer = addLayer(void 0, current);
+  const current2 = getSelectedLayer();
+  const layer = addLayer(void 0, current2);
   selectLayer(layer.id);
   renderLayerList();
   onLayerSelect();
@@ -2223,7 +2580,7 @@ DOM.fileInput.addEventListener("change", async (e) => {
   const layer = getSelectedLayer();
   if (!layer) return;
   DOM.status.textContent = "Loading image...";
-  DOM.output.textContent = "";
+  showGrid(null);
   const img = new Image();
   img.onload = () => {
     DOM.hiddenCanvas.width = img.width;
@@ -2249,6 +2606,7 @@ DOM.resetBCBtn.addEventListener("click", () => {
   onControlChange();
 });
 DOM.invertImageCheck.addEventListener("change", onControlChange);
+DOM.colorCheck.addEventListener("change", onControlChange);
 DOM.distanceSelect.addEventListener("change", onControlChange);
 DOM.invertGlyphsCheck.addEventListener("change", () => {
   updateOutputColors();

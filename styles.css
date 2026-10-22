@@ -10,13 +10,21 @@ body {
 	color: #eee;
 	height: 100vh;
 	display: flex;
+	flex-direction: column;
 	overflow: hidden;
+}
+
+.workspace {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	display: flex;
 }
 
 .sidebar {
 	width: 500px;
 	min-width: 500px;
-	height: 100vh;
+	height: 100%;
 	overflow-y: auto;
 	padding: 1rem;
 	background: #16213e;
@@ -26,15 +34,52 @@ body {
 	gap: 0.75rem;
 }
 
-h1 {
-	font-size: 1.2rem;
+.status-bar {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.35rem 1rem;
+	background: #16213e;
+	border-bottom: 1px solid #0f3460;
+	font-size: 0.8rem;
+}
+
+.logo {
+	font-size: 1rem;
 	margin: 0;
+	white-space: nowrap;
+}
+
+.github-link {
+	display: flex;
+	color: #888;
+}
+
+.github-link:hover {
+	color: #eee;
+}
+
+.status-actions {
+	display: flex;
+	gap: 0.4rem;
+	margin-left: auto;
+}
+
+.status-actions select {
+	font-size: 0.8rem;
+	padding: 0.2rem;
+}
+
+.status-actions button {
+	width: auto;
+	padding: 0.25rem 0.75rem;
+	font-size: 0.8rem;
 }
 
 .main {
 	flex: 1;
 	min-width: 0;
-	height: 100vh;
+	height: 100%;
 	overflow: auto;
 	display: flex;
 	flex-direction: column;
@@ -132,10 +177,11 @@ canvas {
 }
 
 #status {
-	position: absolute;
-	align-self: center;
-	top: 24px;
-	margin: 0.5rem 0;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-style: italic;
 	color: #888;
 }
