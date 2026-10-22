@@ -53,6 +53,8 @@ export interface LayerSettings {
 	brightness: number;
 	contrast: number;
 	invertImage: boolean;
+	/** Colour each glyph to match its cell's average colour. */
+	color: boolean;
 	distance_fn: keyof typeof DISTANCE_FNS;
 	enabledBlocks: Set<string>;
 	charSource: CharSource;
@@ -96,6 +98,7 @@ export function createDefaultLayerSettings(): LayerSettings {
 		brightness: 0,
 		contrast: 1,
 		invertImage: false,
+		color: false,
 		distance_fn: "SSIM" as keyof typeof DISTANCE_FNS,
 		enabledBlocks: new Set(DEFAULT_BLOCKS),
 		charSource: "blocks",
@@ -111,6 +114,7 @@ function cloneLayerSettings(source: LayerSettings): LayerSettings {
 		brightness: source.brightness,
 		contrast: source.contrast,
 		invertImage: source.invertImage,
+		color: source.color,
 		distance_fn: source.distance_fn,
 		enabledBlocks: new Set(source.enabledBlocks),
 		charSource: source.charSource,
@@ -132,6 +136,13 @@ export function addLayer(name?: string, cloneFrom?: Layer): Layer {
 	};
 	layerState.layers.push(layer);
 	return layer;
+}
+
+/** Discard all layers and start over with one default layer. */
+export function resetLayers(): Layer {
+	layerState.layers = [];
+	nextLayerId = 1;
+	return addLayer();
 }
 
 export function removeLayer(id: string): void {
@@ -215,6 +226,7 @@ export function buildConvertParams(
 		distance_fn: layer.settings.distance_fn,
 		invertGlyphs: global.invertGlyphs,
 		invertImage: layer.settings.invertImage,
+		color: layer.settings.color,
 		brightness: layer.settings.brightness,
 		contrast: layer.settings.contrast,
 	};

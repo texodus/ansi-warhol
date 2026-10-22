@@ -71,6 +71,13 @@ shape best matches that patch of the image, using WebGPU (with CPU fallback).
 - **Crop**: click *Select Region* and drag over the output to limit the
   selected layer to an area. Hold Shift to add to the region, or Alt/⌘ to
   remove from it.
+- **Color**: per layer, colour each glyph so its cell, as displayed (glyph
+  ink plus the background showing through, including line-height leading),
+  averages to the image's colour there. Brightness, contrast and *Invert
+  Image* only steer glyph choice; colours always come from the original image.
+- **Export**: *Copy* puts plain text (and coloured HTML, when colour is on) on
+  the clipboard. *Save* writes plain text (`.txt`), ANSI 24-bit colour
+  (`.ans`) or a standalone HTML page (`.html`).
 
 
 ## Getting started
@@ -90,7 +97,8 @@ npm run build
 npm run serve
 ```
 
-Open the URL `serve` prints, choose an image, and adjust the controls.
+This serves the built app from `dist/`. Open the URL `serve` prints, choose
+an image, and adjust the controls.
 
 ## CLI
 
@@ -103,11 +111,13 @@ npm link
 ```
 
 ```bash
-ansi-warhol [--width <n>] [--distance <fn>] [--evaluate <fn>] [--out <file>] <image.png>
+ansi-warhol [--width <n>] [--distance <fn>] [--evaluate <fn>] [--out <file>] [--color] <image.png>
 ```
 
 This converts a PNG, auto-fitting brightness and contrast, and writes the
-result to `out.txt` (or `out_1.txt`, `out_2.txt`, … if those exist). The image
+result to `out.txt` (or `out_1.txt`, `out_2.txt`, … if those exist). With
+`--color` it writes ANSI 24-bit colour to `out.ans` instead; view it with
+`cat out.ans` in a truecolor terminal. The image
 path must come last. Run `ansi-warhol --help` for all options, or
 `./bin/ansi-warhol` to run it without linking.
 
@@ -126,14 +136,3 @@ const { ascii, stats } = pngToAscii(
 
 `estimateAscii` is a generator that runs the same conversion while searching
 for the best brightness and contrast. `WebGPURenderer` offers both on the GPU.
-
-## Development
-
-```bash
-npm run build    # bundle CLI, library and web app into dist/
-npm run lint     # biome check
-npm run format   # biome check --write
-```
-
-The source lives in `src/`. The conversion core is in `ascii.ts`,
-`distance.ts` and `webgpu.ts`, and the web UI is in `src/web/`.

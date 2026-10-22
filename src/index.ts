@@ -26,6 +26,14 @@ export {
 	pngToAscii,
 	UNICODE_BLOCKS,
 } from "./ascii";
+export type { CharGrid, GridStyle } from "./chargrid";
+export {
+	gridFromText,
+	gridToAnsi,
+	gridToHtml,
+	gridToHtmlDocument,
+	gridToText,
+} from "./chargrid";
 export type { CanvasFactory } from "./canvas-factory";
 export { browserCanvasFactory } from "./canvas-factory";
 export type { GlyphEntry } from "./distance";

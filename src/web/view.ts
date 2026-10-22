@@ -49,7 +49,7 @@ export function applyFontStyle(
 export function renderStats(stats: AsciiStats) {
 	DOM.stats.style.display = "block";
 	DOM.stats.textContent =
-		`Cell: ${stats.cell_width}×${stats.cell_height}\n` +
+		`Cell: ${stats.cell_width.toFixed(1)}×${stats.cell_height.toFixed(1)}px\n` +
 		`Grid: ${stats.width}×${stats.height}\n` +
 		`Chars: ${stats.chars} (${(stats.chars_ratio * 100).toFixed(1)}%)\n` +
 		`Unique: ${stats.unique_chars} (${(stats.unique_chars_ratio * 100).toFixed(1)}%)`;

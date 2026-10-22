@@ -17,7 +17,7 @@
 //    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
 
 import * as esbuild from "esbuild";
-import { copyFileSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, readFileSync } from "fs";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 
@@ -53,14 +53,10 @@ await esbuild.build({
   outfile: "dist/app.js",
 });
 
+// The web app is served from dist/: index.html, app.js and styles.css
 copyFileSync("src/web/styles.css", "dist/styles.css");
-
-// Generate index.html at project root, rewriting paths to dist/
-const html = readFileSync("src/web/index.html", "utf-8")
-  .replace('href="styles.css"', 'href="dist/styles.css"')
-  .replace('src="app.js"', 'src="dist/app.js"');
-writeFileSync("index.html", html);
+copyFileSync("src/web/index.html", "dist/index.html");
 
 console.log(
-  "Build complete: dist/cli.cjs, dist/ansi-warhol.esm.js, dist/app.js, dist/styles.css, index.html",
+  "Build complete: dist/cli.cjs, dist/ansi-warhol.esm.js, dist/app.js, dist/styles.css, dist/index.html",
 );

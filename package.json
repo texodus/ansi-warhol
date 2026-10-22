@@ -39,7 +39,8 @@
   "scripts": {
     "build": "node build.mjs",
     "start": "./bin/ansi-warhol",
-    "serve": "npm exec serve .",
+    "serve": "npm exec serve dist",
+    "deploy": "node deploy.mjs",
     "lint": "biome check src/",
     "format": "biome check --write src/"
   },

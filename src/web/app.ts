@@ -19,12 +19,13 @@
 import {
 	browserCanvasFactory,
 	estimateAscii,
+	gridFromText,
 	pngToAscii,
 	DISTANCE_FNS,
 	EVALUTATE_FNS,
 	WebGPURenderer,
 } from "../index";
-import type { AsciiStats } from "../index";
+import type { AsciiResult, AsciiStats, CharGrid } from "../index";
 import { DOM } from "./dom";
 import {
 	applyFontStyle,
@@ -42,13 +43,16 @@ import {
 	getLayerState,
 	getSelectedLayer,
 	removeLayer,
+	resetLayers,
 	selectLayer,
 } from "./layers";
 import type { Layer } from "./layers";
 import { initLayerList, renderLayerList } from "./layer-list";
-import { mergeAsciiLayers } from "./merge";
+import { mergeGrids } from "./merge";
+import { showGrid } from "./output";
 import { CharsetControls } from "./charset";
 import { applyCrop, CropSelector } from "./crop";
+import { initStatusBar } from "./statusbar";
 
 // --- Per-layer control sync ---
 
@@ -58,6 +62,7 @@ function populateControlsFromLayer(layer: Layer): void {
 	DOM.contrastInput.value = layer.settings.contrast.toFixed(2);
 	DOM.contrastRange.value = layer.settings.contrast.toFixed(2);
 	DOM.invertImageCheck.checked = layer.settings.invertImage;
+	DOM.colorCheck.checked = layer.settings.color;
 	DOM.distanceSelect.value = layer.settings.distance_fn;
 	blockPicker.renderBlockLists();
 	charsetControls.render();
@@ -81,6 +86,7 @@ function saveControlsToLayer(): void {
 	layer.settings.brightness = parseFloat(DOM.brightnessInput.value) || 0;
 	layer.settings.contrast = parseFloat(DOM.contrastInput.value) || 1;
 	layer.settings.invertImage = DOM.invertImageCheck.checked;
+	layer.settings.color = DOM.colorCheck.checked;
 	layer.settings.distance_fn = DOM.distanceSelect
 		.value as keyof typeof DISTANCE_FNS;
 }
@@ -92,6 +98,13 @@ function onControlChange() {
 }
 
 // --- Core actions ---
+
+function croppedGrid(result: AsciiResult, layer: Layer): CharGrid {
+	return applyCrop(
+		gridFromText(result.ascii, result.colors),
+		layer.settings.crop,
+	);
+}
 
 async function run() {
 	const state = getLayerState();
@@ -110,7 +123,7 @@ async function run() {
 			? gpuRenderer.pngToAscii.bind(gpuRenderer)
 			: pngToAscii;
 
-		const layerResults: (string | null)[] = [];
+		const layerResults: (CharGrid | null)[] = [];
 		let lastStats: AsciiStats | null = null;
 
 		for (const layer of state.layers) {
@@ -138,14 +151,15 @@ async function run() {
 				p.brightness,
 				p.contrast,
 				p.fontName,
+				p.lineHeight,
+				p.color,
 			);
 
-			layerResults.push(applyCrop(result.ascii, layer.settings.crop));
+			layerResults.push(croppedGrid(result, layer));
 			lastStats = result.stats;
 		}
 
-		const merged = mergeAsciiLayers(layerResults);
-		DOM.output.textContent = merged;
+		showGrid(mergeGrids(layerResults));
 		cropSelector.render();
 
 		const selected = getSelectedLayer();
@@ -180,21 +194,14 @@ async function autoFit() {
 
 	applyFontStyle(global.fontName, global.lineHeight);
 	DOM.status.textContent = "Auto-fitting brightness & contrast...";
-	DOM.output.textContent = "";
+	showGrid(null);
 	await new Promise((r) => setTimeout(r, 50));
 	await document.fonts.ready;
 
 	try {
 		const t0 = performance.now();
 		const backend = gpuRenderer ? "WebGPU" : "CPU";
-		let result:
-			| {
-					ascii: string;
-					brightness: number;
-					contrast: number;
-					stats: AsciiStats;
-			  }
-			| undefined;
+		let result: AsciiResult | undefined;
 
 		if (gpuRenderer) {
 			for await (const r of gpuRenderer.estimateAscii(
@@ -208,9 +215,11 @@ async function autoFit() {
 				p.invertGlyphs,
 				p.invertImage,
 				p.fontName,
+				p.lineHeight,
+				p.color,
 			)) {
 				result = r;
-				DOM.output.textContent = applyCrop(r.ascii, selected.settings.crop);
+				showGrid(croppedGrid(r, selected));
 				renderPreview(
 					selected.settings.imageData,
 					r.brightness,
@@ -231,9 +240,11 @@ async function autoFit() {
 				p.invertGlyphs,
 				p.invertImage,
 				p.fontName,
+				p.lineHeight,
+				p.color,
 			)) {
 				result = r;
-				DOM.output.textContent = applyCrop(r.ascii, selected.settings.crop);
+				showGrid(croppedGrid(r, selected));
 				renderPreview(
 					selected.settings.imageData,
 					r.brightness,
@@ -322,6 +333,23 @@ function onLayerSelect() {
 
 initLayerList(onLayerSelect, run, run);
 
+// Status bar — "New Image" discards all layers and starts over
+initStatusBar(() => {
+	const hasImages = getLayerState().layers.some((l) => l.settings.imageData);
+	if (hasImages && !confirm("Discard all layers and start a new image?")) {
+		return false;
+	}
+	const layer = resetLayers();
+	selectLayer(layer.id);
+	renderLayerList();
+	onLayerSelect();
+	showGrid(null);
+	DOM.stats.style.display = "none";
+	DOM.autoBtn.disabled = true;
+	DOM.status.textContent = "Select an image to begin.";
+	return true;
+});
+
 // Layer panel buttons
 DOM.addLayerBtn.addEventListener("click", () => {
 	const current = getSelectedLayer();
@@ -361,7 +389,7 @@ DOM.fileInput.addEventListener("change", async (e) => {
 	if (!layer) return;
 
 	DOM.status.textContent = "Loading image...";
-	DOM.output.textContent = "";
+	showGrid(null);
 
 	const img = new Image();
 	img.onload = () => {
@@ -393,6 +421,7 @@ DOM.resetBCBtn.addEventListener("click", () => {
 });
 
 DOM.invertImageCheck.addEventListener("change", onControlChange);
+DOM.colorCheck.addEventListener("change", onControlChange);
 DOM.distanceSelect.addEventListener("change", onControlChange);
 
 // Global control event listeners

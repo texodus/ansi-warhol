@@ -35,6 +35,11 @@ export interface AsciiStats {
 
 export interface AsciiResult {
 	ascii: string;
+	/**
+	 * Per-cell glyph colour as row-major R, G, B triplets (`cols × rows × 3`),
+	 * when rendered with colour enabled.
+	 */
+	colors?: Uint8ClampedArray;
 	brightness: number;
 	contrast: number;
 	stats: AsciiStats;

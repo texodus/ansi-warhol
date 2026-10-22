@@ -58,4 +58,9 @@ export const DOM = {
 	cropBtn: el<HTMLButtonElement>("cropBtn"),
 	clearCropBtn: el<HTMLButtonElement>("clearCropBtn"),
 	cropOverlay: el<HTMLDivElement>("cropOverlay"),
+	newImageBtn: el<HTMLButtonElement>("newImageBtn"),
+	copyBtn: el<HTMLButtonElement>("copyBtn"),
+	saveBtn: el<HTMLButtonElement>("saveBtn"),
+	saveFormat: el<HTMLSelectElement>("saveFormat"),
+	colorCheck: el<HTMLInputElement>("colorCheck"),
 };

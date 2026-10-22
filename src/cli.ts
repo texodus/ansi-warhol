@@ -19,6 +19,7 @@
 import * as fs from "fs";
 import { PNG } from "pngjs";
 import { estimateAscii } from "./ascii";
+import { gridFromText, gridToAnsi } from "./chargrid";
 import { DISTANCE_FNS } from "./distance";
 import { EVALUTATE_FNS } from "./evaluate";
 import { nodeCanvasFactory } from "./node-canvas-factory";
@@ -31,6 +32,7 @@ if (args.includes("--help") || args.includes("-h")) {
 	console.log("Usage: ansi-warhol [options] <image.png>");
 	console.log();
 	console.log("Renders a PNG image as Unicode text art to out.txt");
+	console.log("(or out.ans with ANSI 24-bit colour, using --color)");
 	console.log();
 	console.log("Options:");
 	console.log(
@@ -44,6 +46,9 @@ if (args.includes("--help") || args.includes("-h")) {
 	);
 	console.log(
 		"  --out <file>      Output file (default: out.txt, or out_N.txt if taken)",
+	);
+	console.log(
+		"  --color           Colour each glyph to match the image (ANSI truecolor)",
 	);
 	console.log("  -h, --help        Show this help message");
 	console.log("  -v, --version     Show version number");
@@ -72,15 +77,18 @@ function parseStringArg(args: string[], name: string): string | undefined {
 	return args[idx + 1];
 }
 
-function nextOutputPath(): string {
-	if (!fs.existsSync("out.txt")) return "out.txt";
+function nextOutputPath(ext: string): string {
+	if (!fs.existsSync(`out.${ext}`)) return `out.${ext}`;
 	let i = 1;
-	while (fs.existsSync(`out_${i}.txt`)) i++;
-	return `out_${i}.txt`;
+	while (fs.existsSync(`out_${i}.${ext}`)) i++;
+	return `out_${i}.${ext}`;
 }
 
+const color = args.includes("--color");
+args.splice(args.indexOf("--color"), color ? 1 : 0);
+
 const optWidth = parseArg(args, "--width");
-const outPath = parseStringArg(args, "--out") || nextOutputPath();
+const outPath = parseStringArg(args, "--out") || nextOutputPath(color ? "ans" : "txt");
 const distanceArg = parseStringArg(args, "--distance") || "SSIM";
 const evaluateArg = parseStringArg(args, "--evaluate") || "KURTOSIS";
 
@@ -119,18 +127,26 @@ if (!fs.existsSync(inputPath)) {
 const buffer = fs.readFileSync(inputPath);
 const png = PNG.sync.read(buffer);
 const outWidth = optWidth ?? png.width;
-let ascii = "";
+let rows = 0;
 for (const result of estimateAscii(
 	png,
 	outWidth,
 	nodeCanvasFactory,
 	evaluate_fn,
 	distance_fn,
+	undefined,
+	undefined,
+	false,
+	false,
+	"monospace",
+	"normal",
+	color,
 )) {
-	ascii = result.ascii;
-	fs.writeFileSync(outPath, ascii);
+	rows = result.stats.height;
+	const out = color
+		? gridToAnsi(gridFromText(result.ascii, result.colors), 0x000000, 0xeeeeee)
+		: result.ascii;
+	fs.writeFileSync(outPath, out);
 }
 
-console.log(
-	`Rendered ${outWidth}x${Math.ceil(ascii.length / outWidth)} image to ${outPath}`,
-);
+console.log(`Rendered ${outWidth}x${rows} image to ${outPath}`);

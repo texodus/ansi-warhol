@@ -16,6 +16,7 @@
 //  ╰⋟▄▃▂▝◓▀▝◆▞▘╚L┛◂▀▔◡▁▂▃0╯  [MIT License](https://opensource.org/license/mit).
 //    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
 
+import type { CharGrid } from "../index";
 import { DOM } from "./dom";
 import type { CropOp, CropRect, CropShape, Layer } from "./layers";
 
@@ -85,19 +86,23 @@ function combineCrop(
 }
 
 /**
- * Blank every cell of `ascii` outside `crop`. Blank cells are spaces, which
- * the layer merge treats as transparent.
+ * Blank every cell of `grid` outside `crop`. Blank cells are uncoloured
+ * spaces, which the layer merge treats as transparent.
  */
-export function applyCrop(ascii: string, crop: CropShape[]): string {
-	if (crop.length === 0) return ascii;
-	const lines = ascii.split("\n").map((l) => [...l]);
-	const cols = Math.max(0, ...lines.map((l) => l.length));
-	const mask = cropMask(crop, cols, lines.length);
-	return lines
-		.map((line, row) =>
-			line.map((ch, col) => (mask[row * cols + col] ? ch : " ")).join(""),
-		)
-		.join("\n");
+export function applyCrop(grid: CharGrid, crop: CropShape[]): CharGrid {
+	if (crop.length === 0) return grid;
+	const cols = Math.max(0, ...grid.lines.map((l) => l.length));
+	const mask = cropMask(crop, cols, grid.lines.length);
+	const kept = (row: number, col: number) => mask[row * cols + col] === 1;
+	return {
+		lines: grid.lines.map((line, row) =>
+			line.map((ch, col) => (kept(row, col) ? ch : " ")),
+		),
+		colors:
+			grid.colors?.map((rowColors, row) =>
+				rowColors.map((c, col) => (kept(row, col) ? c : -1)),
+			) ?? null,
+	};
 }
 
 /** SVG path data (in cell units) for a mask's fill and its boundary. */

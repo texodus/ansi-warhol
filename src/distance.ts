@@ -28,6 +28,8 @@ export interface GlyphEntry {
 	height: number;
 	sumG: number;
 	sumG2: number;
+	/** Fraction of the cell (0–1) covered by ink, ignoring `invertGlyphs`. */
+	coverage: number;
 }
 
 function histogramIntersection(

@@ -28,6 +28,7 @@ export interface ConvertParams {
 	chars: string[];
 	invertGlyphs: boolean;
 	invertImage: boolean;
+	color: boolean;
 	brightness: number;
 	contrast: number;
 }

@@ -20,9 +20,11 @@
 
 import {
 	ASCII_CHARS,
-	computeStats,
-	createCharacterPortraits,
 	measureFontRatio,
+	type PreparedRender,
+	prepareRender,
+	preparedColors,
+	preparedStats,
 } from "./ascii";
 import type { CanvasFactory } from "./canvas-factory";
 import type { DISTANCE_FNS, GlyphEntry } from "./distance";
@@ -75,8 +77,7 @@ const SSIM_C2: f32 = 58.5225;
 const HIST_BINS: u32 = 16u;
 
 struct Uniforms {
-    img_width: u32,
-    img_height: u32,
+    lum_width: u32,
     grid_width: u32,
     grid_height: u32,
     glyph_w: u32,
@@ -91,7 +92,8 @@ struct GridPoint {
     contrast: f32,
 };
 
-@group(0) @binding(0) var<storage, read> image: array<u32>;
+// Image luminance resampled so each cell is exactly glyph_w x glyph_h
+@group(0) @binding(0) var<storage, read> lum: array<f32>;
 @group(0) @binding(1) var<storage, read> glyph_lum: array<f32>;
 @group(0) @binding(2) var<storage, read> glyph_stats: array<vec2<f32>>;
 @group(0) @binding(3) var<uniform> uniforms: Uniforms;
@@ -112,12 +114,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let row = cell_idx / uniforms.grid_width;
     let bp = grid_points[grid_point_idx];
 
-    let x0 = (col * uniforms.img_width) / uniforms.grid_width;
-    let x1 = ((col + 1u) * uniforms.img_width) / uniforms.grid_width;
-    let y0 = (row * uniforms.img_height) / uniforms.grid_height;
-    let y1 = ((row + 1u) * uniforms.img_height) / uniforms.grid_height;
-    let region_w = x1 - x0;
-    let region_h = y1 - y0;
+    let base = row * uniforms.glyph_h * uniforms.lum_width + col * uniforms.glyph_w;
 
     // Compute source luminance for this cell
     var src_lum: array<f32, ${glyphN}>;
@@ -125,23 +122,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     var sum_s2: f32 = 0.0;
 
     for (var gy: u32 = 0u; gy < uniforms.glyph_h; gy++) {
-        let src_y = y0 + (gy * region_h) / uniforms.glyph_h;
+        let row_offset = base + gy * uniforms.lum_width;
         for (var gx: u32 = 0u; gx < uniforms.glyph_w; gx++) {
-            let src_x = x0 + (gx * region_w) / uniforms.glyph_w;
-            let pixel = image[uniforms.img_width * src_y + src_x];
-            let r = f32(pixel & 0xFFu);
-            let g = f32((pixel >> 8u) & 0xFFu);
-            let b = f32((pixel >> 16u) & 0xFFu);
-            var lum = 0.299 * r + 0.587 * g + 0.114 * b;
-            lum = ((lum / 255.0 + bp.brightness - 0.5) * bp.contrast + 0.5) * 255.0;
-            lum = clamp(lum, 0.0, 255.0);
+            var v = lum[row_offset + gx];
+            v = ((v / 255.0 + bp.brightness - 0.5) * bp.contrast + 0.5) * 255.0;
+            v = clamp(v, 0.0, 255.0);
             if (uniforms.invert_image != 0u) {
-                lum = 255.0 - lum;
+                v = 255.0 - v;
             }
             let i = gy * uniforms.glyph_w + gx;
-            src_lum[i] = lum;
-            sum_s += lum;
-            sum_s2 += lum * lum;
+            src_lum[i] = v;
+            sum_s += v;
+            sum_s2 += v * v;
         }
     }
 
@@ -285,15 +277,15 @@ export class WebGPURenderer {
 	}
 
 	private async dispatch(
-		png: RawImage,
-		glyphs: GlyphEntry[],
+		prep: PreparedRender,
 		gridPoints: { brightness: number; contrast: number }[],
 		distanceFn: keyof typeof DISTANCE_FNS,
-		gridWidth: number,
-		gridHeight: number,
 		invertImage: boolean = false,
 	): Promise<Uint32Array> {
 		const device = this.device;
+		const { glyphs, lum, lumWidth } = prep;
+		const gridWidth = prep.geom.cols;
+		const gridHeight = prep.geom.rows;
 		const glyphW = glyphs[0].width;
 		const glyphH = glyphs[0].height;
 		const glyphN = glyphW * glyphH;
@@ -304,12 +296,12 @@ export class WebGPURenderer {
 
 		const pipeline = this.getPipeline(glyphN, distanceFn);
 
-		// Image buffer: RGBA bytes reinterpreted as u32 per pixel
+		// Resampled luminance buffer
 		const imageBuffer = device.createBuffer({
-			size: png.data.byteLength,
+			size: lum.byteLength,
 			usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
 		});
-		device.queue.writeBuffer(imageBuffer, 0, new Uint8Array(png.data));
+		device.queue.writeBuffer(imageBuffer, 0, lum);
 
 		// Glyph luminance: all glyphs packed contiguously
 		const glyphLumData = new Float32Array(numGlyphs * glyphN);
@@ -334,10 +326,9 @@ export class WebGPURenderer {
 		});
 		device.queue.writeBuffer(glyphStatsBuffer, 0, glyphStatsData);
 
-		// Uniforms (9 × u32 = 36 bytes)
+		// Uniforms (8 × u32 = 32 bytes)
 		const uniformData = new Uint32Array([
-			png.width,
-			png.height,
+			lumWidth,
 			gridWidth,
 			gridHeight,
 			glyphW,
@@ -442,39 +433,29 @@ export class WebGPURenderer {
 	}
 
 	async renderAscii(
-		png: RawImage,
-		width: number,
-		glyphs: GlyphEntry[],
+		prep: PreparedRender,
 		distance_fn: keyof typeof DISTANCE_FNS,
 		brightness = 0,
 		contrast = 1,
-		fontRatio = 0.5,
 		invertImage = false,
-	): Promise<{ ascii: string; stats: AsciiStats }> {
-		const cell_width = Math.floor(png.width / width);
-		const cell_height = Math.ceil(cell_width / fontRatio);
-		const height = Math.round(png.height / (cell_width / fontRatio));
-
+	): Promise<{
+		ascii: string;
+		stats: AsciiStats;
+		colors?: Uint8ClampedArray;
+	}> {
+		const { geom, glyphs } = prep;
 		const indices = await this.dispatch(
-			png,
-			glyphs,
+			prep,
 			[{ brightness, contrast }],
 			distance_fn,
-			width,
-			height,
 			invertImage,
 		);
-
-		const ascii = this.indicesToString(indices, glyphs, width, height);
-		const stats = computeStats(
+		const ascii = this.indicesToString(indices, glyphs, geom.cols, geom.rows);
+		return {
 			ascii,
-			cell_width,
-			cell_height,
-			width,
-			height,
-			glyphs.length,
-		);
-		return { ascii, stats };
+			stats: preparedStats(prep, ascii),
+			colors: preparedColors(prep, indices),
+		};
 	}
 
 	async *estimateAscii(
@@ -488,19 +469,24 @@ export class WebGPURenderer {
 		invertGlyphs: boolean = false,
 		invertImage: boolean = false,
 		fontName: string = "monospace",
+		lineHeight: number | "normal" = "normal",
+		color = false,
 	): AsyncGenerator<AsciiResult, AsciiResult> {
-		const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
-		const cell_width = Math.floor(png.width / width);
-		const cell_height = Math.ceil(cell_width / ratio);
-		const height = Math.round(png.height / (cell_width / ratio));
-		const glyphs = createCharacterPortraits(
-			cell_height,
+		const ratio =
+			fontRatio ?? measureFontRatio(canvasFactory, fontName, lineHeight);
+		const prep = prepareRender(
+			png,
+			width,
 			canvasFactory,
 			chars,
 			ratio,
 			invertGlyphs,
 			fontName,
+			lineHeight,
+			color,
 		);
+		const { glyphs } = prep;
+		const height = prep.geom.rows;
 		const totalCells = width * height;
 
 		function evaluate(ascii: string): number {
@@ -530,18 +516,17 @@ export class WebGPURenderer {
 		}
 
 		const coarseIndices = await this.dispatch(
-			png,
-			glyphs,
+			prep,
 			gridPoints,
 			distance_fn,
-			width,
-			height,
 			invertImage,
 		);
 
 		// Evaluate each grid point on CPU
 		let bestF = -Infinity;
 		let bestAscii = "";
+		let bestIndices = new Uint32Array(0);
+		let bestOffset = 0;
 		let bestC = 4;
 		let bestB = 0.1;
 
@@ -557,20 +542,16 @@ export class WebGPURenderer {
 			if (val > bestF) {
 				bestF = val;
 				bestAscii = ascii;
+				bestIndices = coarseIndices;
+				bestOffset = i * totalCells;
 				bestC = gridPoints[i].contrast;
 				bestB = gridPoints[i].brightness;
 			}
 		}
 
-		let stats = computeStats(
-			bestAscii,
-			cell_width,
-			cell_height,
-			width,
-			height,
-			glyphs.length,
-		);
-		yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
+		let stats = preparedStats(prep, bestAscii);
+		let colors = preparedColors(prep, bestIndices, bestOffset);
+		yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats, colors };
 
 		// Phase 2: Refine around the best point — 25 points in one dispatch
 		const cRadius = (cMax - cMin) / cSteps / 2;
@@ -586,12 +567,9 @@ export class WebGPURenderer {
 		}
 
 		const refineIndices = await this.dispatch(
-			png,
-			glyphs,
+			prep,
 			refinePoints,
 			distance_fn,
-			width,
-			height,
 			invertImage,
 		);
 
@@ -607,6 +585,8 @@ export class WebGPURenderer {
 			if (val > bestF) {
 				bestF = val;
 				bestAscii = ascii;
+				bestIndices = refineIndices;
+				bestOffset = i * totalCells;
 				bestC = refinePoints[i].contrast;
 				bestB = refinePoints[i].brightness;
 			}
@@ -616,16 +596,17 @@ export class WebGPURenderer {
 			`Final -- Contrast ${bestC}, Brightness ${bestB}, Total ${bestF}`,
 		);
 
-		stats = computeStats(
-			bestAscii,
-			cell_width,
-			cell_height,
-			width,
-			height,
-			glyphs.length,
-		);
-		yield { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
-		return { ascii: bestAscii, brightness: bestB, contrast: bestC, stats };
+		stats = preparedStats(prep, bestAscii);
+		colors = preparedColors(prep, bestIndices, bestOffset);
+		const best = {
+			ascii: bestAscii,
+			brightness: bestB,
+			contrast: bestC,
+			stats,
+			colors,
+		};
+		yield best;
+		return best;
 	}
 
 	async pngToAscii(
@@ -640,29 +621,30 @@ export class WebGPURenderer {
 		brightness: number = 0,
 		contrast: number = 1,
 		fontName: string = "monospace",
+		lineHeight: number | "normal" = "normal",
+		color = false,
 	): Promise<AsciiResult> {
-		const ratio = fontRatio ?? measureFontRatio(canvasFactory, fontName);
-		const cell_width = Math.floor(png.width / width);
-		const cell_height = Math.ceil(cell_width / ratio);
-		const glyphs = createCharacterPortraits(
-			cell_height,
+		const ratio =
+			fontRatio ?? measureFontRatio(canvasFactory, fontName, lineHeight);
+		const prep = prepareRender(
+			png,
+			width,
 			canvasFactory,
 			chars,
 			ratio,
 			invertGlyphs,
 			fontName,
+			lineHeight,
+			color,
 		);
-		const { ascii, stats } = await this.renderAscii(
-			png,
-			width,
-			glyphs,
+		const { ascii, stats, colors } = await this.renderAscii(
+			prep,
 			distance_fn,
 			brightness,
 			contrast,
-			ratio,
 			invertImage,
 		);
-		return { ascii, brightness, contrast, stats };
+		return { ascii, brightness, contrast, stats, colors };
 	}
 
 	destroy(): void {

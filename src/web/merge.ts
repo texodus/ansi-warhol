@@ -16,34 +16,38 @@
 //  ╰⋟▄▃▂▝◓▀▝◆▞▘╚L┛◂▀▔◡▁▂▃0╯  [MIT License](https://opensource.org/license/mit).
 //    ▔^◝∼╼≘⊂⊐◻◻◻◻◻⊏⊐≘┴▘^▔
 
+import type { CharGrid } from "../index";
+
 /**
- * Merge multiple ASCII art strings. Layers are ordered bottom-to-top.
- * Space = transparent. Non-space in higher layers overwrites lower.
+ * Merge layer grids, ordered bottom-to-top. Spaces are transparent; a glyph in
+ * a higher layer replaces whatever is below it, along with its colour.
  */
-export function mergeAsciiLayers(layerResults: (string | null)[]): string {
-	const nonNull = layerResults.filter((s): s is string => s !== null);
-	if (nonNull.length === 0) return "";
-	if (nonNull.length === 1) return nonNull[0];
+export function mergeGrids(layers: (CharGrid | null)[]): CharGrid | null {
+	const grids = layers.filter((g): g is CharGrid => g !== null);
+	if (grids.length === 0) return null;
+	if (grids.length === 1) return grids[0];
 
-	const allLines = nonNull.map((s) => s.split("\n").map((l) => [...l]));
-	const maxRows = Math.max(...allLines.map((l) => l.length));
-	const maxCols = Math.max(
-		...allLines.map((l) => Math.max(...l.map((r) => r.length), 0)),
+	const rows = Math.max(...grids.map((g) => g.lines.length));
+	const cols = Math.max(
+		...grids.map((g) => Math.max(0, ...g.lines.map((l) => l.length))),
 	);
-
-	const result: string[] = [];
-	for (let row = 0; row < maxRows; row++) {
-		const chars: string[] = new Array(maxCols).fill(" ");
-		for (const lines of allLines) {
-			if (row >= lines.length) continue;
-			const line = lines[row];
+	const colored = grids.some((g) => g.colors);
+	const lines: string[][] = [];
+	const colors: Int32Array[] = [];
+	for (let row = 0; row < rows; row++) {
+		const chars: string[] = new Array(cols).fill(" ");
+		const rowColors = new Int32Array(cols).fill(-1);
+		for (const grid of grids) {
+			const line = grid.lines[row];
+			if (!line) continue;
 			for (let col = 0; col < line.length; col++) {
-				if (line[col] !== " ") {
-					chars[col] = line[col];
-				}
+				if (line[col] === " ") continue;
+				chars[col] = line[col];
+				rowColors[col] = grid.colors ? grid.colors[row][col] : -1;
 			}
 		}
-		result.push(chars.join(""));
+		lines.push(chars);
+		colors.push(rowColors);
 	}
-	return result.join("\n");
+	return { lines, colors: colored ? colors : null };
 }
